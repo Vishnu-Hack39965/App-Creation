@@ -38,3 +38,13 @@ jobs:
         with:
           name: library-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Library App v1.0.${{ github.run_number }}
+          body: Latest build of Rakshapal Singh Library App
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
