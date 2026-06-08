@@ -1,0 +1,85 @@
+name: App Review
+
+on:
+  workflow_dispatch:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download APK from previous build
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: library-debug-apk
+          path: apk/
+
+      - name: Run Emulator and Take Screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            echo "Installing APK..."
+            adb install apk/app-debug.apk
+
+            echo "Launching app..."
+            adb shell am start -n com.rakshapal.library/.MainActivity
+            sleep 6
+
+            echo "Screenshot 1 - Launch / permission dialog..."
+            adb shell screencap /sdcard/01_launch.png
+            adb pull /sdcard/01_launch.png
+
+            echo "Granting location permission..."
+            adb shell pm grant com.rakshapal.library android.permission.ACCESS_FINE_LOCATION
+            sleep 3
+
+            echo "Relaunch after permission..."
+            adb shell am start -n com.rakshapal.library/.MainActivity
+            sleep 6
+
+            echo "Screenshot 2 - After permission granted..."
+            adb shell screencap /sdcard/02_after_permission.png
+            adb pull /sdcard/02_after_permission.png
+
+            echo "Screenshot 3 - App info..."
+            adb shell am start -a android.settings.APPLICATION_DETAILS_SETTINGS \
+              -d package:com.rakshapal.library
+            sleep 3
+            adb shell screencap /sdcard/03_app_info.png
+            adb pull /sdcard/03_app_info.png
+
+            echo "Test WiFi deep link..."
+            adb shell am start \
+              -W -a android.intent.action.VIEW \
+              -d "rakshapallibrary://wifi?ssid=TestNetwork&pass=TestPass123" \
+              com.rakshapal.library
+            sleep 4
+            adb shell screencap /sdcard/04_wifi_deeplink.png
+            adb pull /sdcard/04_wifi_deeplink.png
+
+            echo "Test forgetwifi deep link..."
+            adb shell am start \
+              -W -a android.intent.action.VIEW \
+              -d "rakshapallibrary://forgetwifi" \
+              com.rakshapal.library
+            sleep 4
+            adb shell screencap /sdcard/05_forgetwifi.png
+            adb pull /sdcard/05_forgetwifi.png
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-review-screenshots
+          path: |
+            01_launch.png
+            02_after_permission.png
+            03_app_info.png
+            04_wifi_deeplink.png
+            05_forgetwifi.png
