@@ -18,13 +18,17 @@ jobs:
           name: library-debug-apk
           path: apk/
 
-      - name: Run Emulator and Take Screenshots
+      - name: Run Emulator and Record
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           arch: x86_64
           profile: pixel_2
           script: |
+            echo "Starting screen recording..."
+            adb shell screenrecord /sdcard/review.mp4 &
+            RECORD_PID=$!
+
             echo "Installing APK..."
             adb install apk/app-debug.apk
 
@@ -34,46 +38,49 @@ jobs:
 
             echo "Screenshot 1 - Launch / permission dialog..."
             adb shell screencap /sdcard/01_launch.png
-            adb pull /sdcard/01_launch.png
+            adb pull /sdcard/01_launch.png || true
 
             echo "Granting location permission..."
             adb shell pm grant com.rakshapal.library android.permission.ACCESS_FINE_LOCATION
             sleep 3
 
-            echo "Relaunch after permission..."
+            echo "Force stop and relaunch..."
+            adb shell am force-stop com.rakshapal.library
+            sleep 2
             adb shell am start -n com.rakshapal.library/.MainActivity
             sleep 6
 
             echo "Screenshot 2 - After permission granted..."
             adb shell screencap /sdcard/02_after_permission.png
-            adb pull /sdcard/02_after_permission.png
+            adb pull /sdcard/02_after_permission.png || true
 
             echo "Screenshot 3 - App info..."
-            adb shell am start -a android.settings.APPLICATION_DETAILS_SETTINGS \
-              -d package:com.rakshapal.library
+            adb shell am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d "package:com.rakshapal.library"
             sleep 3
             adb shell screencap /sdcard/03_app_info.png
-            adb pull /sdcard/03_app_info.png
+            adb pull /sdcard/03_app_info.png || true
 
             echo "Test WiFi deep link..."
-            adb shell am start \
-              -W -a android.intent.action.VIEW \
-              -d "rakshapallibrary://wifi?ssid=TestNetwork&pass=TestPass123" \
-              com.rakshapal.library
+            adb shell am start -W -a android.intent.action.VIEW -d "rakshapallibrary://wifi?ssid=TestNetwork&pass=TestPass123" com.rakshapal.library
             sleep 4
             adb shell screencap /sdcard/04_wifi_deeplink.png
-            adb pull /sdcard/04_wifi_deeplink.png
+            adb pull /sdcard/04_wifi_deeplink.png || true
 
             echo "Test forgetwifi deep link..."
-            adb shell am start \
-              -W -a android.intent.action.VIEW \
-              -d "rakshapallibrary://forgetwifi" \
-              com.rakshapal.library
+            adb shell am start -W -a android.intent.action.VIEW -d "rakshapallibrary://forgetwifi" com.rakshapal.library
             sleep 4
             adb shell screencap /sdcard/05_forgetwifi.png
-            adb pull /sdcard/05_forgetwifi.png
+            adb pull /sdcard/05_forgetwifi.png || true
 
-      - name: Upload screenshots
+            echo "Stopping recording..."
+            kill $RECORD_PID || true
+            sleep 3
+            adb pull /sdcard/review.mp4 || true
+
+            echo "All done."
+
+      - name: Upload screenshots even if failed
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-review-screenshots
@@ -83,3 +90,12 @@ jobs:
             03_app_info.png
             04_wifi_deeplink.png
             05_forgetwifi.png
+          if-no-files-found: warn
+
+      - name: Upload video even if failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-review-video
+          path: review.mp4
+          if-no-files-found: warn
