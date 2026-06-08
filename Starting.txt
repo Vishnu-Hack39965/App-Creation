@@ -11,14 +11,17 @@ your-repo/
 │       └── build.yml           ← AUTO BUILDS APK ON EVERY PUSH
 ├── starting.txt
 ├── files.zip
+├── missing-files.zip
 └── android/
     ├── build.gradle            ← NEW (root gradle)
     ├── settings.gradle         ← NEW
     ├── gradlew                 ← NEW (linux build script)
     ├── gradlew.bat             ← NEW (windows build script)
+    ├── settings.properties     ← NEW
     ├── gradle/
     │   └── wrapper/
     │       └── gradle-wrapper.properties  ← NEW
+    │       └── gradle.zip                 ← NEW
     └── app/
         ├── build.gradle        ← already had this
         └── src/main/
