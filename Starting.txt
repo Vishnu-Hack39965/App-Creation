@@ -81,15 +81,9 @@ your-repo/
                  old connectToWifi logic
 ----------------------------------------------------------------------------------------------------------------------
          window.loadAdmin();  
-      }  
-    }  
-  });  
-} else {  
-  document.getElementById('loginPanel').classList.remove('hidden');  
+ } else {document.getElementById('loginPanel').classList.remove('hidden');  
   document.getElementById('profilePanel').classList.add('hidden');  
-  document.getElementById('tab-man').classList.add('hidden');  
-}
-
+  document.getElementById('tab-man').classList.add('hidden');  }
 });
 
 window.connectToWifi = async () => {
@@ -105,7 +99,7 @@ window.connectToWifi = async () => {
       }
     } catch (e) { alert("Error fetching wifi data"); }
   };
-----------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------
 uid: auth.currentUser.uid,
         name: currentUserData.name,
         phone: currentUserData.phone,
@@ -118,19 +112,6 @@ uid: auth.currentUser.uid,
   };
 
     // --- Updated Connect Logic: Fetches fresh data every time ---
-  window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (wSnap.exists()) {
-        const { ssid, pass } = wSnap.data();
-        if (window.AndroidBridge) {
-          window.AndroidBridge.connectWifi(ssid, pass);
-        } else {
-          alert("Native Bridge Not Found. Run as APK.");
-        }
-      }
-    } catch (e) { alert("Error fetching wifi data"); }
-  };
 
 
 
