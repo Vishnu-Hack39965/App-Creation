@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.rakshapal.library">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions needed for WiFi management -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -12,9 +10,7 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
         android:label="Rakshapal Library"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         android:usesCleartextTraffic="false">
@@ -24,32 +20,23 @@
             android:exported="true"
             android:launchMode="singleTask">
 
-            <!-- Default launcher intent -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep link: mylibraryapp://wifi?ssid=...&pass=... -->
-            <!-- Triggered when member taps Connect to Internet button -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="mylibraryapp"
-                    android:host="wifi" />
+                <data android:scheme="mylibraryapp" android:host="wifi" />
             </intent-filter>
 
-            <!-- Deep link: mylibraryapp://forgetwifi -->
-            <!-- Triggered on membership exit to disconnect from library WiFi -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="mylibraryapp"
-                    android:host="forgetwifi" />
+                <data android:scheme="mylibraryapp" android:host="forgetwifi" />
             </intent-filter>
 
         </activity>
