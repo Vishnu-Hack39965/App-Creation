@@ -24,11 +24,18 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        requestWifiPermissionIfNeeded()
         handleDeepLink(intent)
 
         if (intent.data == null) {
-            openInCustomTab(LIBRARY_URL)
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+                openInCustomTab(LIBRARY_URL)
+            } else {
+                requestPermissions(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                    PERMISSION_REQUEST_CODE
+                )
+            }
         }
     }
 
@@ -36,18 +43,6 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
-    }
-
-    private fun requestWifiPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                    PERMISSION_REQUEST_CODE
-                )
-            }
-        }
     }
 
     override fun onRequestPermissionsResult(
@@ -58,13 +53,19 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Wi-Fi permission granted.", Toast.LENGTH_SHORT).show()
+                openInCustomTab(LIBRARY_URL)
             } else {
                 Toast.makeText(
                     this,
-                    "Location permission is required to connect to Library Wi-Fi. Please allow it in Settings.",
+                    "Location permission is required to use this app.\nPlease allow it to continue.",
                     Toast.LENGTH_LONG
                 ).show()
+                android.os.Handler(mainLooper).postDelayed({
+                    requestPermissions(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                        PERMISSION_REQUEST_CODE
+                    )
+                }, 3000)
             }
         }
     }
@@ -103,14 +104,18 @@ class MainActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun connectToLibraryWifi(ssid: String, pass: String) {
+        // Handles edge case: user revoked permission from Settings after app opened
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(
                 this,
-                "Location permission needed to connect to Library Wi-Fi. Please allow it in Settings.",
+                "Location permission was revoked. Please allow it in Settings.",
                 Toast.LENGTH_LONG
             ).show()
-            requestWifiPermissionIfNeeded()
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                PERMISSION_REQUEST_CODE
+            )
             return
         }
 
