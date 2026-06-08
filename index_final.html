@@ -326,15 +326,19 @@ document.getElementById('u-img').src = currentUserData.photo || user.photoURL;
   window.connectToWifi = async () => {
     try {
       const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (wSnap.exists()) {
-        const { ssid, pass } = wSnap.data();
-        if (window.AndroidBridge) {
-          window.AndroidBridge.connectWifi(ssid, pass);
-        } else {
-          alert("Native Bridge Not Found. Run as APK.");
+      if (!wSnap.exists()) { alert("Wi-Fi not configured yet. Contact admin."); return; }
+      const { ssid, pass } = wSnap.data();
+      if (!ssid || !pass) { alert("Wi-Fi details incomplete. Contact admin."); return; }
+      const deepLink = `rakshapallibrary://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
+      window.location = deepLink;
+      setTimeout(() => {
+        if (document.visibilityState === 'visible') {
+          alert("Please open this in the Library App to connect to Wi-Fi.");
         }
-      }
-    } catch (e) { alert("Error fetching wifi data"); }
+      }, 1500);
+    } catch (e) {
+      alert("Error fetching Wi-Fi details. Check your connection.");
+    }
   };
 
 // Wi-Fi Admin Save (Still works for owner)
@@ -342,7 +346,7 @@ window.saveWifiSettings = async () => {
 const ssid = document.getElementById('wifi-ssid').value;
 const pass = document.getElementById('wifi-pass').value;
 await setDoc(doc(db, "settings", "wifi"), { ssid, pass });
-alert("Saved.");
+alert("Saved.");wifi
 };
 
 // --- Live Interval ---
@@ -458,21 +462,6 @@ document.querySelectorAll('.sig-timer').forEach(async el => {
     document.getElementById('lstep2').classList.add('step-active');
   };
 
-    // --- Updated Connect Logic: Fetches fresh data every time ---
-  window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (wSnap.exists()) {
-        const { ssid, pass } = wSnap.data();
-        if (window.AndroidBridge) {
-          window.AndroidBridge.connectWifi(ssid, pass);
-        } else {
-          alert("Native Bridge Not Found. Run as APK.");
-        }
-      }
-    } catch (e) { alert("Error fetching wifi data"); }
-  };
-
   // --- Updated Leave Logic: Added Forget Command ---
   window.verifyLeave = async () => {
     if (document.getElementById('leave-otp').value == window.currentLeaveOtp) {
@@ -485,12 +474,10 @@ document.querySelectorAll('.sig-timer').forEach(async el => {
             `Membership Left. Last Balance: ${Math.floor(lastBal)} days`
           )
         });
-        
-        // ADDED: Forget command
-        if (window.AndroidBridge) { window.AndroidBridge.forgetWifi(); }
-
+        // Fire forget deep link — app removes WiFi suggestion silently
+        window.location = `rakshapallibrary://forgetwifi`;
         await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
-        location.reload();
+        setTimeout(() => location.reload(), 1000);
     } else alert("Invalid OTP");
   };
 
