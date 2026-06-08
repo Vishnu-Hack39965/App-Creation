@@ -51,3 +51,32 @@ your-repo/
 
 
 
+
+
+
+
+
+-------------------------------------
+        updated logic
+-------------------------------------
+
+  window.connectToWifi = async () => {
+    try {
+      const wSnap = await getDoc(doc(db, "settings", "wifi"));
+      if (!wSnap.exists()) { alert("Wi-Fi not configured yet. Contact admin."); return; }
+      const { ssid, pass } = wSnap.data();
+      if (!ssid || !pass) { alert("Wi-Fi details incomplete. Contact admin."); return; }
+      const deepLink = `rakshapallibrary://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
+      window.location = deepLink;
+      setTimeout(() => {
+        if (document.visibilityState === 'visible') {
+          alert("Please open this in the Library App to connect to Wi-Fi.");
+        }
+      }, 1500);
+    } catch (e) {
+      alert("Error fetching Wi-Fi details. Check your connection.");
+    }
+  };
+
+
+
