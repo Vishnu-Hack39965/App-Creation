@@ -1,3 +1,13 @@
 Hello!!!
 
 This is the Starting
+
+
+your-repo/
+└── android/
+    └── app/
+        ├── build.gradle
+        └── src/main/
+            ├── AndroidManifest.xml
+            ├── res/layout/activity_main.xml
+            └── java/com/rakshapal/library/MainActivity.kt
