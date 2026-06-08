@@ -17,11 +17,11 @@ your-repo/
     ├── settings.gradle         ← NEW
     ├── gradlew                 ← NEW (linux build script)
     ├── gradlew.bat             ← NEW (windows build script)
-    ├── settings.properties     ← NEW
+    ├── gradle.properties       ← NEW
     ├── gradle/
     │   └── wrapper/
     │       └── gradle-wrapper.properties  ← NEW
-    │       └── gradle.zip                 ← NEW
+    │       └── gradle-wrapper.zip         ← NEW
     └── app/
         ├── build.gradle        ← already had this
         └── src/main/
