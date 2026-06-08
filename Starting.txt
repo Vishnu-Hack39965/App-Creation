@@ -56,9 +56,9 @@ your-repo/
 
 
 
--------------------------------------
-        updated logic
--------------------------------------
+----------------------------------------------------------------------------------------------------------------------
+                                                updated logic
+----------------------------------------------------------------------------------------------------------------------
 
   window.connectToWifi = async () => {
     try {
@@ -77,6 +77,114 @@ your-repo/
       alert("Error fetching Wi-Fi details. Check your connection.");
     }
   };
+----------------------------------------------------------------------------------------------------------------------
+                 old connectToWifi logic
+----------------------------------------------------------------------------------------------------------------------
+         window.loadAdmin();  
+      }  
+    }  
+  });  
+} else {  
+  document.getElementById('loginPanel').classList.remove('hidden');  
+  document.getElementById('profilePanel').classList.add('hidden');  
+  document.getElementById('tab-man').classList.add('hidden');  
+}
+
+});
+
+window.connectToWifi = async () => {
+    try {
+      const wSnap = await getDoc(doc(db, "settings", "wifi"));
+      if (wSnap.exists()) {
+        const { ssid, pass } = wSnap.data();
+        if (window.AndroidBridge) {
+          window.AndroidBridge.connectWifi(ssid, pass);
+        } else {
+          alert("Native Bridge Not Found. Run as APK.");
+        }
+      }
+    } catch (e) { alert("Error fetching wifi data"); }
+  };
+----------------------------------------------------------
+uid: auth.currentUser.uid,
+        name: currentUserData.name,
+        phone: currentUserData.phone,
+        timestamp: getStamp(),
+        expiresAt: Date.now() + 120000
+    });
+    window.currentLeaveOtp = otp;
+    document.getElementById('lstep1').classList.remove('step-active');
+    document.getElementById('lstep2').classList.add('step-active');
+  };
+
+    // --- Updated Connect Logic: Fetches fresh data every time ---
+  window.connectToWifi = async () => {
+    try {
+      const wSnap = await getDoc(doc(db, "settings", "wifi"));
+      if (wSnap.exists()) {
+        const { ssid, pass } = wSnap.data();
+        if (window.AndroidBridge) {
+          window.AndroidBridge.connectWifi(ssid, pass);
+        } else {
+          alert("Native Bridge Not Found. Run as APK.");
+        }
+      }
+    } catch (e) { alert("Error fetching wifi data"); }
+  };
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+         ### updated leave logic ###
+----------------------------------------------------------------------------------------------------------------------
+  window.verifyLeave = async () => {
+    if (document.getElementById('leave-otp').value == window.currentLeaveOtp) {
+        const lastBal = window.getRealSurvival(currentUserData);
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+          totalPaidDays: lastBal,
+          joinDateISO: null,
+          history: arrayUnion(
+            `Left Library on ${getStamp()}`,
+            `Membership Left. Last Balance: ${Math.floor(lastBal)} days`
+          )
+        });
+        // Fire forget deep link — app removes WiFi suggestion silently
+        window.location = `rakshapallibrary://forgetwifi`;
+        await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
+        setTimeout(() => location.reload(), 1000);
+    } else alert("Invalid OTP");
+  };
+-----------------------------------------------------------------------------------
+                old leave logic
+-----------------------------------------------------------------------------------
+  window.verifyLeave = async () => {
+    if (document.getElementById('leave-otp').value == window.currentLeaveOtp) {
+        const lastBal = window.getRealSurvival(currentUserData);
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+          totalPaidDays: lastBal,
+          joinDateISO: null,
+          history: arrayUnion(
+            `Left Library on ${getStamp()}`,
+            `Membership Left. Last Balance: ${Math.floor(lastBal)} days`
+          )
+        });
+        
+        // ADDED: Forget command
+        if (window.AndroidBridge) { window.AndroidBridge.forgetWifi(); }
+
+        await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
+        location.reload();
+    } else alert("Invalid OTP");
+  };
+
+    // --- Admin Logic ---
+  window.loadAdmin = () => {
+    // 1. Signals (Reverted Payment Layout)
+  
+
 
 
 
