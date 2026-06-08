@@ -342,7 +342,7 @@ window.saveWifiSettings = async () => {
 const ssid = document.getElementById('wifi-ssid').value;
 const pass = document.getElementById('wifi-pass').value;
 await setDoc(doc(db, "settings", "wifi"), { ssid, pass });
-alert("Saved.");
+alert("Saved.");wifi
 };
 
 // --- Live Interval ---
@@ -456,21 +456,6 @@ document.querySelectorAll('.sig-timer').forEach(async el => {
     window.currentLeaveOtp = otp;
     document.getElementById('lstep1').classList.remove('step-active');
     document.getElementById('lstep2').classList.add('step-active');
-  };
-
-    // --- Updated Connect Logic: Fetches fresh data every time ---
-  window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (wSnap.exists()) {
-        const { ssid, pass } = wSnap.data();
-        if (window.AndroidBridge) {
-          window.AndroidBridge.connectWifi(ssid, pass);
-        } else {
-          alert("Native Bridge Not Found. Run as APK.");
-        }
-      }
-    } catch (e) { alert("Error fetching wifi data"); }
   };
 
   // --- Updated Leave Logic: Added Forget Command ---
