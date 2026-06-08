@@ -1,8 +1,8 @@
 name: Build APK
 
 on:
-  push:
-    branches: [ main ]
+#  push:                       #<----this is for automatic run on every commint in main branch
+#    branches: [ main ]        #     but it is commented for now for showing purpose only-------->
   workflow_dispatch:
 
 env:
