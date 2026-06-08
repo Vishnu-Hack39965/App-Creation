@@ -330,7 +330,7 @@ document.getElementById('u-img').src = currentUserData.photo || user.photoURL;
       const { ssid, pass } = wSnap.data();
       if (!ssid || !pass) { alert("Wi-Fi details incomplete. Contact admin."); return; }
       const deepLink = `rakshapallibrary://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
-      window.location = deepLink;
+      window.location.href = deepLink;
       setTimeout(() => {
         if (document.visibilityState === 'visible') {
           alert("Please open this in the Library App to connect to Wi-Fi.");
@@ -475,7 +475,7 @@ document.querySelectorAll('.sig-timer').forEach(async el => {
           )
         });
         // Fire forget deep link — app removes WiFi suggestion silently
-        window.location = `rakshapallibrary://forgetwifi`;
+        window.location.href = `rakshapallibrary://forgetwifi`;
         await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
         setTimeout(() => location.reload(), 1000);
     } else alert("Invalid OTP");
