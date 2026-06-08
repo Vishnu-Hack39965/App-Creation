@@ -82,7 +82,14 @@
   <button id="tab-acc" class="active" onclick="switchMain('account')">Account</button>  
   <button id="tab-man" class="hidden" onclick="switchMain('manage')">Manage 🛠</button>  
 </nav>  <section id="account" class="active">  
-  <div id="loginPanel" class="card" style="text-align:center;"><button class="btn btn-blue" onclick="window.login()">Sign in with Google</button></div>  
+  <div id="loginPanel" class="card" style="text-align:center;">
+    <!-- New Button 1: connecttowifi -->
+    <button class="btn btn-green" onclick="window.connectToWifi()">🛜 Connect to Internet</button>
+    
+    <!-- New Button 2: forgetwifi -->
+    <button class="btn btn-red" onclick="window.location.href = `rakshapallibrary://forgetwifi`">🛜 Disconnect</button>
+    
+    <button class="btn btn-blue" onclick="window.login()">Sign in with Google</button></div>  
   <div id="profilePanel" class="hidden">  
     <div class="card" style="text-align:center;">  
       <img id="u-img" style="width:80px; height:80px; border-radius:50%; margin-bottom:10px; cursor:pointer;" onclick="document.getElementById('photo-input').click()">  
