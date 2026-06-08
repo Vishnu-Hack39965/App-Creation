@@ -3,6 +3,35 @@ Hello!!!
 This is the Starting
 
 
+2.Updated :-
+your-repo/
+├── .github/
+│   └── workflows/
+│       └── build.yml           ← AUTO BUILDS APK ON EVERY PUSH
+├── starting.txt
+├── files.zip
+└── android/
+    ├── build.gradle            ← NEW (root gradle)
+    ├── settings.gradle         ← NEW
+    ├── gradlew                 ← NEW (linux build script)
+    ├── gradlew.bat             ← NEW (windows build script)
+    ├── gradle/
+    │   └── wrapper/
+    │       └── gradle-wrapper.properties  ← NEW
+    └── app/
+        ├── build.gradle        ← already had this
+        └── src/main/
+            ├── AndroidManifest.xml        ← already had this
+            ├── res/layout/
+            │   └── activity_main.xml      ← already had this
+            └── java/com/rakshapal/library/
+                └── MainActivity.kt        ← already had this
+
+
+
+
+
+1.First step structure:
 your-repo/
 ├── starting.txt
 ├── files.zip
@@ -13,3 +42,8 @@ your-repo/
             ├── AndroidManifest.xml
             ├── res/layout/activity_main.xml
             └── java/com/rakshapal/library/MainActivity.kt
+
+
+
+
+
