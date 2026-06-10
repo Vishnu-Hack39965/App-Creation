@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Making Guide — Complete Practical Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #161b27;
+  --bg3: #1e2535;
+  --border: #2a3450;
+  --text: #e2e8f0;
+  --muted: #7a8aaa;
+  --accent: #4f8ef7;
+  --accent2: #7c5cbf;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --teal: #2dd4bf;
+  --pink: #f472b6;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.7; }
+ 
+/* Layout */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 260px; min-width: 260px; background: var(--bg2); border-right: 1px solid var(--border); padding: 1.5rem 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.main { flex: 1; overflow-y: auto; }
+.content { max-width: 860px; margin: 0 auto; padding: 2rem 2.5rem 4rem; }
+ 
+/* Sidebar */
+.sidebar-logo { padding: 0 1.25rem 1.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+.sidebar-logo span { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+.sidebar-logo p { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.nav-section { padding: 0.5rem 1.25rem 0; }
+.nav-section-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; padding-top: 8px; }
+.nav-item { display: block; padding: 5px 10px; border-radius: 6px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: rgba(79,142,247,0.12); color: var(--accent); }
+.nav-item .badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+.badge-new { background: rgba(52,211,153,0.15); color: var(--green); }
+.badge-yours { background: rgba(79,142,247,0.15); color: var(--accent); }
+ 
+/* Page sections (shown/hidden) */
+.page { display: none; }
+.page.active { display: block; }
+ 
+/* Section headers */
+.page-header { margin-bottom: 2rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+.page-header h1 { font-size: 24px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.page-header p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-right: 6px; font-weight: 500; }
+.tag-blue { background: rgba(79,142,247,0.15); color: var(--accent); }
+.tag-purple { background: rgba(124,92,191,0.15); color: #a78bfa; }
+.tag-green { background: rgba(52,211,153,0.15); color: var(--green); }
+.tag-amber { background: rgba(251,191,36,0.15); color: var(--amber); }
+.tag-red { background: rgba(248,113,113,0.15); color: var(--red); }
+.tag-teal { background: rgba(45,212,191,0.15); color: var(--teal); }
+.tag-pink { background: rgba(244,114,182,0.15); color: var(--pink); }
+ 
+/* Code blocks */
+pre { background: #0a0d14; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
+.code-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--border); background: #0d1018; border-radius: 8px 8px 0 0; }
+.code-lang { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.copy-btn { font-size: 11px; color: var(--muted); border: 1px solid var(--border); background: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-family: var(--sans); transition: all 0.15s; }
+.copy-btn:hover { color: var(--text); border-color: var(--accent); }
+code { font-family: var(--mono); font-size: 13px; line-height: 1.8; display: block; padding: 1rem 1.25rem; color: #cdd6f4; }
+.kw { color: #cba6f7; }
+.fn { color: #89b4fa; }
+.str { color: #a6e3a1; }
+.cmt { color: #45475a; font-style: italic; }
+.num { color: #fab387; }
+.cls { color: #f9e2af; }
+.op { color: #89dceb; }
+ 
+/* Prose */
+h2 { font-size: 18px; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--text); }
+h3 { font-size: 15px; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--accent); }
+p { font-size: 14px; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.75; }
+p strong { color: var(--text); font-weight: 500; }
+ul, ol { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+li { font-size: 14px; color: var(--muted); line-height: 1.75; }
+li strong { color: var(--text); }
+ 
+/* Callout boxes */
+.callout { border-radius: 8px; padding: 12px 16px; margin: 1rem 0; font-size: 13px; line-height: 1.6; }
+.callout-blue { background: rgba(79,142,247,0.08); border-left: 3px solid var(--accent); color: #93b4f7; }
+.callout-green { background: rgba(52,211,153,0.08); border-left: 3px solid var(--green); color: #6ee7b7; }
+.callout-amber { background: rgba(251,191,36,0.08); border-left: 3px solid var(--amber); color: #fcd34d; }
+.callout-red { background: rgba(248,113,113,0.08); border-left: 3px solid var(--red); color: #fca5a5; }
+.callout-purple { background: rgba(124,92,191,0.08); border-left: 3px solid #7c5cbf; color: #c4b5fd; }
+ 
+/* Step cards */
+.step-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin: 0.75rem 0; }
+.step-num { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+.step-card h4 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.step-card p { font-size: 13px; margin-bottom: 0; }
+ 
+/* Architecture cards */
+.arch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 1rem 0; }
+.arch-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; cursor: pointer; transition: all 0.15s; }
+.arch-card:hover { border-color: var(--accent); }
+.arch-card.selected { border-color: var(--accent); background: rgba(79,142,247,0.06); }
+.arch-card h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.arch-card p { font-size: 12px; margin-bottom: 8px; }
+.arch-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+ 
+/* Visual diagrams */
+.diagram-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; margin: 1rem 0; overflow-x: auto; }
+.flow-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.flow-node { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; font-size: 12px; font-family: var(--mono); color: var(--text); white-space: nowrap; }
+.flow-node.highlight { background: rgba(79,142,247,0.15); border-color: var(--accent); color: var(--accent); }
+.flow-node.green { background: rgba(52,211,153,0.12); border-color: var(--green); color: var(--green); }
+.flow-node.amber { background: rgba(251,191,36,0.12); border-color: var(--amber); color: var(--amber); }
+.flow-node.red { background: rgba(248,113,113,0.12); border-color: var(--red); color: var(--red); }
+.flow-node.purple { background: rgba(124,92,191,0.12); border-color: #7c5cbf; color: #a78bfa; }
+.flow-node.teal { background: rgba(45,212,191,0.12); border-color: var(--teal); color: var(--teal); }
+.flow-arrow { color: var(--muted); font-size: 14px; }
+.flow-label { font-size: 11px; color: var(--muted); }
+ 
+/* Comparison table */
+.comp-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13px; }
+.comp-table th { background: var(--bg3); color: var(--muted); font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.comp-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: top; line-height: 1.5; }
+.comp-table tr:last-child td { border-bottom: none; }
+.comp-table td:first-child { color: var(--text); font-weight: 500; font-family: var(--mono); font-size: 12px; }
+ 
+/* Model builder */
+.builder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 1rem 0; }
+.builder-category { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+.builder-category h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.choice-row { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; padding: 8px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+.choice-row:hover { background: var(--bg3); }
+.choice-row.picked { background: rgba(79,142,247,0.08); border-color: rgba(79,142,247,0.3); }
+.choice-row input[type=checkbox] { accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+.choice-label { font-size: 12px; }
+.choice-label strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 2px; }
+.choice-label span { color: var(--muted); font-size: 11px; }
+.builder-output { background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px; padding: 1.25rem; margin-top: 16px; }
+.builder-output h4 { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+ 
+/* Progress stepper */
+.stepper { display: flex; gap: 0; margin: 1.5rem 0; overflow-x: auto; }
+.step-pill { display: flex; align-items: center; gap: 0; }
+.step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.step-dot.done { background: rgba(52,211,153,0.2); color: var(--green); border: 1px solid var(--green); }
+.step-dot.active { background: rgba(79,142,247,0.2); color: var(--accent); border: 1px solid var(--accent); }
+.step-dot.todo { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+.step-line { width: 40px; height: 1px; background: var(--border); flex-shrink: 0; }
+ 
+/* Inline code */
+.ic { font-family: var(--mono); font-size: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: #89b4fa; }
+ 
+/* Divider */
+hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+ 
+/* Scroll */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+ 
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .content { padding: 1.5rem; }
+  .builder-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+ 
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span>AI Making Guide</span>
+    <p>Practical · Code-first · Complete</p>
+  </div>
+ 
+  <div class="nav-section">
+    <div class="nav-section-label">Foundation</div>
+    <button class="nav-item active" onclick="show('intro')">Overview & setup</button>
+    <button class="nav-item" onclick="show('attention')">Attention: Q, K, V</button>
+    <button class="nav-item" onclick="show('architectures')">All architectures</button>
+  </div>
+ 
+  <div class="nav-section">
+    <div class="nav-section-label">Safety & Alignment</div>
+    <button class="nav-item" onclick="show('constitutional')">Constitutional AI <span class="badge badge-new">key</span></button>
+    <button class="nav-item" onclick="show('rlhf')">RLHF & reward models</button>
+  </div>
+ 
+  <div class="nav-section">
+    <div class="nav-section-label">Modalities</div>
+    <button class="nav-item" onclick="show('vision')">Image & video understanding</button>
+    <button class="nav-item" onclick="show('imagegen')">Image & video generation</button>
+    <button class="nav-item" onclick="show('multimodal')">Multimodal fusion</button>
+  </div>
+ 
+  <div class="nav-section">
+    <div class="nav-section-label">Your Model</div>
+    <button class="nav-item" onclick="show('builder')">Design your model <span class="badge badge-yours">you</span></button>
+    <button class="nav-item" onclick="show('training')">Training on Colab</button>
+    <button class="nav-item" onclick="show('output')">Output formatting</button>
+  </div>
+</nav>
+ 
+<!-- MAIN CONTENT -->
+<div class="main">
+<div class="content">
+ 
+<!-- ═══════════════════════════════════════════════════════ INTRO -->
+<div id="intro" class="page active">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-blue">start here</span></div>
+    <h1>What you're building & how this guide works</h1>
+    <p>You want a model that does: chat, code, image/video recognition, and image/video generation — and outputs answers in structured markdown. This guide covers every design decision you'll make, with working code for each one.</p>
+  </div>
+ 
+  <h2>Your model at a glance</h2>
+  <div class="diagram-box">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em">What your model receives → what it does → what it outputs</div>
+    <div class="flow-row">
+      <div class="flow-node">Text (chat/code)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">Transformer backbone</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green">Structured markdown reply</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-node">Image / video frames</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node teal">Vision encoder (ViT)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">Projection layer</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green">Description / analysis</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-node">Text prompt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple">Diffusion / VAE decoder</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green">Generated image / video</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-node amber">Constitutional checker</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green">Safe output or polite refusal</div>
+    </div>
+  </div>
+ 
+  <h2>Install everything first</h2>
+  <div class="step-card">
+    <div class="step-num">Colab → Runtime → T4 GPU → then run:</div>
+    <pre><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code>!pip install transformers datasets tokenizers accelerate peft bitsandbytes -q
+!pip install diffusers timm einops open_clip_torch -q
+!pip install torch torchvision torchaudio -q
+!pip install sentencepiece protobuf huggingface_hub -q</code></pre>
+  </div>
+  <div class="step-card">
+    <div class="step-num">Verify GPU</div>
+    <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> torch
+print(torch.cuda.get_device_name(<span class="num">0</span>))   <span class="cmt"># Tesla T4</span>
+print(torch.cuda.get_device_properties(<span class="num">0</span>).total_memory // <span class="num">1e9</span>, <span class="str">"GB"</span>)  <span class="cmt"># ~15 GB</span></code></pre>
+  </div>
+  <div class="callout callout-amber">T4 has ~15 GB VRAM. You can run GPT-2 (124M), Phi-2 (2.7B with 4-bit), LLaVA-1.5 (7B with 4-bit). Anything bigger needs A100.</div>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ ATTENTION -->
+<div id="attention" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-blue">core mechanism</span></div>
+    <h1>Attention: Query, Key, Value — every variant</h1>
+    <p>The Q/K/V mechanism is the heart of every modern AI. Here's what each is, what it does in code, and all variants used in real models.</p>
+  </div>
+ 
+  <h2>What Q, K, V actually are in code</h2>
+  <p>They are three separate linear layers applied to the same input. That's it. The "query" asks a question, the "key" says what's available, the "value" is the actual content fetched.</p>
+ 
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> math
+ 
+<span class="kw">class</span> <span class="cls">SelfAttention</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, embed_dim=<span class="num">512</span>, num_heads=<span class="num">8</span>):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads  <span class="cmt"># 64 per head</span>
+ 
+        <span class="cmt"># These 3 linear layers ARE the Q, K, V</span>
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        self.W_k = nn.Linear(embed_dim, embed_dim)
+        self.W_v = nn.Linear(embed_dim, embed_dim)
+        self.W_out = nn.Linear(embed_dim, embed_dim)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        B, T, C = x.shape  <span class="cmt"># batch, sequence_len, embed_dim</span>
+ 
+        <span class="cmt"># Apply Q K V projections — all same shape as input</span>
+        Q = self.W_q(x)  <span class="cmt"># (B, T, embed_dim) — "what am I looking for?"</span>
+        K = self.W_k(x)  <span class="cmt"># (B, T, embed_dim) — "what do I contain?"</span>
+        V = self.W_v(x)  <span class="cmt"># (B, T, embed_dim) — "what I'll give you if matched"</span>
+ 
+        <span class="cmt"># Split into multiple heads</span>
+        Q = Q.view(B, T, self.num_heads, self.head_dim).transpose(<span class="num">1</span>, <span class="num">2</span>)
+        K = K.view(B, T, self.num_heads, self.head_dim).transpose(<span class="num">1</span>, <span class="num">2</span>)
+        V = V.view(B, T, self.num_heads, self.head_dim).transpose(<span class="num">1</span>, <span class="num">2</span>)
+ 
+        <span class="cmt"># Attention score: Q·K^T / sqrt(head_dim)</span>
+        scores = torch.matmul(Q, K.transpose(<span class="num">-2</span>, <span class="num">-1</span>)) / math.sqrt(self.head_dim)
+ 
+        <span class="cmt"># Causal mask: each token can only see past tokens (for generation)</span>
+        mask = torch.triu(torch.ones(T, T), diagonal=<span class="num">1</span>).bool().to(x.device)
+        scores = scores.masked_fill(mask, float(<span class="str">'-inf'</span>))
+ 
+        <span class="cmt"># Softmax → weights → weighted sum of values</span>
+        weights = torch.softmax(scores, dim=<span class="num">-1</span>)
+        attended = torch.matmul(weights, V)
+ 
+        <span class="cmt"># Merge heads back, final projection</span>
+        attended = attended.transpose(<span class="num">1</span>, <span class="num">2</span>).contiguous().view(B, T, C)
+        <span class="kw">return</span> self.W_out(attended)</code></pre>
+ 
+  <h2>All Q/K/V variants — what changes and why</h2>
+ 
+  <h3>1. Multi-Head Attention (MHA) — used in: original Transformer, GPT-2</h3>
+  <p>Each head gets its own full Q, K, V. 8 heads × 64-dim = 512-dim total. Captures different relationships in parallel.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Standard MHA — num_heads Q projections, num_heads K, num_heads V</span>
+<span class="cmt"># 8 heads, 512 dim → each head: Q(64), K(64), V(64)</span>
+self.attn = nn.MultiheadAttention(embed_dim=<span class="num">512</span>, num_heads=<span class="num">8</span>, batch_first=<span class="kw">True</span>)
+ 
+<span class="cmt"># Usage:</span>
+out, weights = self.attn(query=x, key=x, value=x)  <span class="cmt"># self-attention</span>
+out, weights = self.attn(query=decoder_x, key=encoder_out, value=encoder_out)  <span class="cmt"># cross-attention</span></code></pre>
+ 
+  <h3>2. Grouped Query Attention (GQA) — used in: Llama 3, Mistral, Gemma</h3>
+  <p>Multiple Q heads share one K and V head per group. Cuts memory use by 4–8x with almost no quality loss. This is why Llama 3 fits on less GPU.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">GroupedQueryAttention</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, embed_dim=<span class="num">512</span>, num_heads=<span class="num">8</span>, num_kv_heads=<span class="num">2</span>):
+        super().__init__()
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.groups = num_heads // num_kv_heads  <span class="cmt"># 4 Q heads per KV head</span>
+        self.head_dim = embed_dim // num_heads
+ 
+        self.W_q = nn.Linear(embed_dim, embed_dim)           <span class="cmt"># 8 Q heads (full)</span>
+        self.W_k = nn.Linear(embed_dim, num_kv_heads * self.head_dim)  <span class="cmt"># only 2 K heads</span>
+        self.W_v = nn.Linear(embed_dim, num_kv_heads * self.head_dim)  <span class="cmt"># only 2 V heads</span>
+        self.W_out = nn.Linear(embed_dim, embed_dim)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        B, T, C = x.shape
+        Q = self.W_q(x).view(B, T, self.num_heads, self.head_dim).transpose(<span class="num">1</span>,<span class="num">2</span>)
+        K = self.W_k(x).view(B, T, self.num_kv_heads, self.head_dim).transpose(<span class="num">1</span>,<span class="num">2</span>)
+        V = self.W_v(x).view(B, T, self.num_kv_heads, self.head_dim).transpose(<span class="num">1</span>,<span class="num">2</span>)
+ 
+        <span class="cmt"># Repeat K and V to match Q heads: (B, 2, T, 64) → (B, 8, T, 64)</span>
+        K = K.repeat_interleave(self.groups, dim=<span class="num">1</span>)
+        V = V.repeat_interleave(self.groups, dim=<span class="num">1</span>)
+ 
+        scores = torch.matmul(Q, K.transpose(<span class="num">-2</span>,<span class="num">-1</span>)) / math.sqrt(self.head_dim)
+        out = torch.matmul(torch.softmax(scores, dim=<span class="num">-1</span>), V)
+        out = out.transpose(<span class="num">1</span>,<span class="num">2</span>).contiguous().view(B, T, C)
+        <span class="kw">return</span> self.W_out(out)</code></pre>
+ 
+  <h3>3. Multi-Query Attention (MQA) — used in: PaLM, Falcon, early fast-inference models</h3>
+  <p>All Q heads share exactly ONE K head and ONE V head. Extreme memory saving, slightly more quality loss than GQA. Very fast at inference.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># MQA = GQA with num_kv_heads=1</span>
+self.W_q = nn.Linear(embed_dim, embed_dim)           <span class="cmt"># num_heads Q projections</span>
+self.W_k = nn.Linear(embed_dim, self.head_dim)       <span class="cmt"># single K head</span>
+self.W_v = nn.Linear(embed_dim, self.head_dim)       <span class="cmt"># single V head</span>
+ 
+<span class="cmt"># K and V are broadcast to all Q heads automatically</span>
+K = self.W_k(x).unsqueeze(<span class="num">1</span>).expand(B, self.num_heads, T, self.head_dim)</code></pre>
+ 
+  <h3>4. Cross-Attention — used in: encoder-decoder models, image-text fusion (CLIP, LLaVA)</h3>
+  <p>Q comes from one sequence, K and V come from another. This is how the text decoder "looks at" image features in vision-language models.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># In a vision-language model:</span>
+<span class="cmt"># text_tokens = your text input    (B, T_text, D)</span>
+<span class="cmt"># image_features = from ViT encoder (B, T_img, D)</span>
+ 
+Q = self.W_q(text_tokens)     <span class="cmt"># text asks the question</span>
+K = self.W_k(image_features)  <span class="cmt"># image says what it contains</span>
+V = self.W_v(image_features)  <span class="cmt"># image provides the content</span>
+ 
+<span class="cmt"># Result: text tokens now contain image-aware representations</span>
+scores = torch.matmul(Q, K.transpose(<span class="num">-2</span>,<span class="num">-1</span>)) / math.sqrt(self.head_dim)
+out = torch.matmul(torch.softmax(scores, dim=<span class="num">-1</span>), V)</code></pre>
+ 
+  <h3>5. Flash Attention — used in: every modern model for speed</h3>
+  <p>Same math as regular attention, but computed in GPU SRAM tiles instead of HBM. 2–4x faster, uses 10x less memory. You don't rewrite attention; you just call it.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code>!pip install flash-attn --no-build-isolation -q
+ 
+<span class="kw">from</span> flash_attn import flash_attn_func
+ 
+<span class="cmt"># Shapes must be (B, T, num_heads, head_dim) — note different from standard!</span>
+Q = Q.view(B, T, num_heads, head_dim)
+K = K.view(B, T, num_heads, head_dim)
+V = V.view(B, T, num_heads, head_dim)
+ 
+out = flash_attn_func(Q, K, V, causal=<span class="kw">True</span>)  <span class="cmt"># drop-in, same output</span></code></pre>
+ 
+  <h3>6. Rotary Position Embeddings (RoPE) — used in: Llama, Mistral, GPT-NeoX</h3>
+  <p>Instead of adding position embeddings to tokens, you rotate the Q and K vectors. Allows infinite context length extrapolation. Used in almost all modern models.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">def</span> <span class="fn">rotate_half</span>(x):
+    x1, x2 = x[..., :x.shape[<span class="num">-1</span>]//<span class="num">2</span>], x[..., x.shape[<span class="num">-1</span>]//<span class="num">2</span>:]
+    <span class="kw">return</span> torch.cat([-x2, x1], dim=<span class="num">-1</span>)
+ 
+<span class="kw">def</span> <span class="fn">apply_rope</span>(Q, K, seq_len, dim):
+    <span class="cmt"># Compute rotation frequencies</span>
+    theta = <span class="num">1.0</span> / (<span class="num">10000</span> ** (torch.arange(<span class="num">0</span>, dim, <span class="num">2</span>).float() / dim))
+    positions = torch.arange(seq_len).float()
+    freqs = torch.outer(positions, theta)            <span class="cmt"># (T, dim/2)</span>
+    cos = freqs.cos().repeat(<span class="num">1</span>, <span class="num">2</span>)                 <span class="cmt"># (T, dim)</span>
+    sin = freqs.sin().repeat(<span class="num">1</span>, <span class="num">2</span>)
+ 
+    <span class="cmt"># Rotate Q and K — position info is now baked in</span>
+    Q_rot = Q * cos + rotate_half(Q) * sin
+    K_rot = K * cos + rotate_half(K) * sin
+    <span class="kw">return</span> Q_rot, K_rot
+ 
+<span class="cmt"># Use in forward pass:</span>
+Q, K = apply_rope(Q, K, seq_len=T, dim=self.head_dim)</code></pre>
+ 
+  <div class="callout callout-blue">For your model: use <strong>GQA</strong> (num_kv_heads=2) + <strong>RoPE</strong> + <strong>Flash Attention</strong>. This is the Llama 3 / Mistral recipe and gives the best quality/speed tradeoff on T4 GPU.</div>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ ARCHITECTURES -->
+<div id="architectures" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-purple">design patterns</span></div>
+    <h1>All AI model architectures — what each is, code skeleton</h1>
+    <p>Every major architecture used in production models today, with the code structure and when to use each.</p>
+  </div>
+ 
+  <h2>1. Decoder-only Transformer (GPT-style)</h2>
+  <p>Input flows in, each token attends to all previous tokens, output is next-token prediction. Used in: GPT-4, Claude, Llama, Mistral. <strong>This is what you want for chat and code.</strong></p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">TransformerBlock</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model=<span class="num">512</span>, n_heads=<span class="num">8</span>, d_ff=<span class="num">2048</span>):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = nn.MultiheadAttention(d_model, n_heads, batch_first=<span class="kw">True</span>)
+        self.ln2 = nn.LayerNorm(d_model)
+        <span class="cmt"># Feed-forward network (MLP): expand then compress</span>
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),              <span class="cmt"># activation function</span>
+            nn.Linear(d_ff, d_model)
+        )
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, attn_mask=<span class="kw">None</span>):
+        <span class="cmt"># Pre-norm (modern style — better than post-norm)</span>
+        x = x + self.attn(self.ln1(x), self.ln1(x), self.ln1(x), attn_mask=attn_mask)[<span class="num">0</span>]
+        x = x + self.ff(self.ln2(x))
+        <span class="kw">return</span> x
+ 
+<span class="kw">class</span> <span class="cls">GPTStyleModel</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, vocab_size=<span class="num">50257</span>, d_model=<span class="num">512</span>, n_layers=<span class="num">6</span>):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, d_model)
+        self.blocks = nn.ModuleList([TransformerBlock(d_model) <span class="kw">for</span> _ <span class="kw">in</span> range(n_layers)])
+        self.ln_f = nn.LayerNorm(d_model)
+        self.lm_head = nn.Linear(d_model, vocab_size, bias=<span class="kw">False</span>)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, input_ids):
+        x = self.embed(input_ids)
+        <span class="kw">for</span> block <span class="kw">in</span> self.blocks:
+            x = block(x)
+        logits = self.lm_head(self.ln_f(x))
+        <span class="kw">return</span> logits  <span class="cmt"># (B, T, vocab_size) — probability over next token</span></code></pre>
+ 
+  <h2>2. SwiGLU FFN — used in Llama, PaLM (replaces standard GELU FFN)</h2>
+  <p>A gated activation function that outperforms GELU in language models. Simple swap in the FFN part.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">SwiGLU</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model=<span class="num">512</span>, d_ff=<span class="num">1365</span>):  <span class="cmt"># d_ff = 2/3 * 4 * d_model</span>
+        super().__init__()
+        self.gate = nn.Linear(d_model, d_ff, bias=<span class="kw">False</span>)
+        self.up   = nn.Linear(d_model, d_ff, bias=<span class="kw">False</span>)
+        self.down = nn.Linear(d_ff,   d_model, bias=<span class="kw">False</span>)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="cmt"># Gate controls how much of "up" gets through</span>
+        <span class="kw">return</span> self.down(torch.nn.functional.silu(self.gate(x)) * self.up(x))</code></pre>
+ 
+  <h2>3. Encoder-Decoder (T5 / BART style)</h2>
+  <p>Encoder reads the full input bidirectionally, decoder generates output with cross-attention to encoder. Good for translation, summarization. Not ideal for open-ended chat.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> T5ForConditionalGeneration, T5Tokenizer
+ 
+model = T5ForConditionalGeneration.from_pretrained(<span class="str">"t5-small"</span>)
+tokenizer = T5Tokenizer.from_pretrained(<span class="str">"t5-small"</span>)
+ 
+input_ids = tokenizer(<span class="str">"translate English to French: Hello world"</span>, return_tensors=<span class="str">"pt"</span>).input_ids
+outputs = model.generate(input_ids, max_new_tokens=<span class="num">50</span>)
+print(tokenizer.decode(outputs[<span class="num">0</span>], skip_special_tokens=<span class="kw">True</span>))</code></pre>
+ 
+  <h2>4. Mixture of Experts (MoE) — used in: Mixtral, GPT-4 (rumored)</h2>
+  <p>Instead of one FFN per layer, you have N "expert" FFNs. A router picks the top-2 experts for each token. 8 experts but only 2 active = huge capacity, small compute cost.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">MoELayer</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model=<span class="num">512</span>, n_experts=<span class="num">8</span>, top_k=<span class="num">2</span>):
+        super().__init__()
+        self.n_experts = n_experts
+        self.top_k = top_k
+        <span class="cmt"># Router: learns which expert handles which token types</span>
+        self.router = nn.Linear(d_model, n_experts)
+        <span class="cmt"># Each expert is a separate FFN</span>
+        self.experts = nn.ModuleList([
+            nn.Sequential(nn.Linear(d_model, d_model*<span class="num">4</span>), nn.GELU(), nn.Linear(d_model*<span class="num">4</span>, d_model))
+            <span class="kw">for</span> _ <span class="kw">in</span> range(n_experts)
+        ])
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        B, T, D = x.shape
+        x_flat = x.view(-<span class="num">1</span>, D)  <span class="cmt"># (B*T, D)</span>
+ 
+        <span class="cmt"># Router scores — which experts are best for each token?</span>
+        router_logits = self.router(x_flat)  <span class="cmt"># (B*T, n_experts)</span>
+        scores, indices = torch.topk(torch.softmax(router_logits, dim=-<span class="num">1</span>), self.top_k, dim=-<span class="num">1</span>)
+ 
+        <span class="cmt"># Route each token to its top-2 experts, weighted sum</span>
+        out = torch.zeros_like(x_flat)
+        <span class="kw">for</span> k <span class="kw">in</span> range(self.top_k):
+            <span class="kw">for</span> e <span class="kw">in</span> range(self.n_experts):
+                mask = (indices[:, k] == e)
+                <span class="kw">if</span> mask.any():
+                    out[mask] += scores[mask, k:k+<span class="num">1</span>] * self.experts[e](x_flat[mask])
+        <span class="kw">return</span> out.view(B, T, D)</code></pre>
+ 
+  <h2>5. State Space Models (Mamba) — emerging alternative to attention</h2>
+  <p>No attention at all — uses recurrent state updates with selective scanning. O(n) instead of O(n²) memory. Very fast on long sequences. Still catching up to transformers on most tasks.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code>!pip install mamba-ssm -q  <span class="cmt"># requires CUDA</span>
+<span class="kw">from</span> mamba_ssm <span class="kw">import</span> Mamba
+ 
+<span class="cmt"># Drop-in replacement for a transformer block</span>
+block = Mamba(
+    d_model=<span class="num">512</span>,
+    d_state=<span class="num">16</span>,    <span class="cmt"># SSM state dimension</span>
+    d_conv=<span class="num">4</span>,       <span class="cmt"># local convolution width</span>
+    expand=<span class="num">2</span>,       <span class="cmt"># expansion factor</span>
+)
+x = torch.randn(<span class="num">2</span>, <span class="num">1024</span>, <span class="num">512</span>)  <span class="cmt"># (batch, seq_len, d_model)</span>
+out = block(x)                  <span class="cmt"># same shape — faster on long sequences</span></code></pre>
+ 
+  <h2>Architecture comparison</h2>
+  <table class="comp-table">
+    <tr><th>Architecture</th><th>Memory</th><th>Best for</th><th>Your use?</th></tr>
+    <tr><td>Decoder-only (GPT)</td><td>O(n²)</td><td>Chat, code, generation</td><td>✅ Yes — core LLM</td></tr>
+    <tr><td>Enc-Dec (T5)</td><td>O(n²)</td><td>Translation, summarization</td><td>❌ Skip for chat</td></tr>
+    <tr><td>GQA variant</td><td>O(n²) less KV</td><td>Same as GPT, less memory</td><td>✅ Yes — use GQA</td></tr>
+    <tr><td>MoE (Mixtral)</td><td>O(n²)</td><td>Large capacity, same compute</td><td>⚡ Advanced — add later</td></tr>
+    <tr><td>Mamba (SSM)</td><td>O(n)</td><td>Very long sequences</td><td>⚡ Advanced — emerging</td></tr>
+    <tr><td>ViT (vision)</td><td>O(n²) patches</td><td>Image understanding</td><td>✅ Yes — for vision</td></tr>
+    <tr><td>Diffusion UNet</td><td>O(n)</td><td>Image generation</td><td>✅ Yes — for gen</td></tr>
+  </table>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ CONSTITUTIONAL -->
+<div id="constitutional" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-green">safety system</span></div>
+    <h1>Constitutional AI — write your rules, enforce them in code</h1>
+    <p>Constitutional AI (CAI) means your model generates an answer, checks it against your written rules, and if it violates them — either revises the answer or refuses with an explanation. You write the constitution. The model follows it.</p>
+  </div>
+ 
+  <h2>How it works — the full loop</h2>
+  <div class="diagram-box">
+    <div class="flow-row">
+      <div class="flow-node">User message</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node highlight">Model generates draft answer</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node amber">Constitution checker</div>
+    </div>
+    <div style="margin:8px 0 4px 120px;font-size:12px;color:var(--muted)">↓ violation found?</div>
+    <div class="flow-row">
+      <div class="flow-node red">Rule violated</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node amber">Check: is there a valid purpose?</div>
+    </div>
+    <div class="flow-row" style="margin-top:4px">
+      <div style="width:140px"></div>
+      <div class="flow-arrow">Yes →</div>
+      <div class="flow-node green">Rewrite to help within rules</div>
+    </div>
+    <div class="flow-row" style="margin-top:4px">
+      <div style="width:140px"></div>
+      <div class="flow-arrow">No →</div>
+      <div class="flow-node red">Decline: "I can't help with [X]"</div>
+    </div>
+    <div class="flow-row" style="margin-top:8px">
+      <div class="flow-node green">Rule OK</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green">Send answer to user</div>
+    </div>
+  </div>
+ 
+  <h2>Step 1 — Define your constitution (your rules)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Your constitution — you write these rules</span>
+CONSTITUTION = [
+    {
+        <span class="str">"rule_id"</span>: <span class="str">"no_harm"</span>,
+        <span class="str">"description"</span>: <span class="str">"Do not provide instructions for harming people"</span>,
+        <span class="str">"check_prompt"</span>: <span class="str">"Does this response give instructions that could physically harm a person?"</span>,
+        <span class="str">"allowed_purposes"</span>: [<span class="str">"medical professional context"</span>, <span class="str">"fiction writing"</span>, <span class="str">"self-defense education"</span>],
+        <span class="str">"refusal_message"</span>: <span class="str">"I'm not able to help with harming people."</span>
+    },
+    {
+        <span class="str">"rule_id"</span>: <span class="str">"no_illegal"</span>,
+        <span class="str">"description"</span>: <span class="str">"Do not help with clearly illegal activities"</span>,
+        <span class="str">"check_prompt"</span>: <span class="str">"Does this response facilitate illegal activity?"</span>,
+        <span class="str">"allowed_purposes"</span>: [<span class="str">"legal research"</span>, <span class="str">"journalism"</span>, <span class="str">"law enforcement"</span>],
+        <span class="str">"refusal_message"</span>: <span class="str">"I can't assist with illegal activities."</span>
+    },
+    {
+        <span class="str">"rule_id"</span>: <span class="str">"no_personal_data"</span>,
+        <span class="str">"description"</span>: <span class="str">"Do not reveal or request personal identifying information"</span>,
+        <span class="str">"check_prompt"</span>: <span class="str">"Does this response request or expose personal data like addresses, IDs, passwords?"</span>,
+        <span class="str">"allowed_purposes"</span>: [<span class="str">"user asking about their own data"</span>],
+        <span class="str">"refusal_message"</span>: <span class="str">"I don't handle personal identifying information."</span>
+    },
+    <span class="cmt"># Add your own rules here...</span>
+]</code></pre>
+ 
+  <h2>Step 2 — The critique function (checks one rule)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+ 
+<span class="cmt"># Use a small model as the checker (can be different from your main model)</span>
+checker = pipeline(<span class="str">"text-generation"</span>, model=<span class="str">"microsoft/phi-2"</span>, device=<span class="num">0</span>)
+ 
+<span class="kw">def</span> <span class="fn">check_rule</span>(user_message, draft_response, rule):
+    <span class="str">"""
+    Returns: ('ok', None) or ('violated', reason_string)
+    """</span>
+    critique_prompt = <span class="fn">f</span><span class="str">"""You are a safety checker. Answer ONLY 'YES' or 'NO'.
+ 
+Rule: {rule['description']}
+Question to check: {rule['check_prompt']}
+ 
+User asked: {user_message}
+AI responded: {draft_response}
+ 
+Does this response violate the rule? Answer YES or NO only:"""</span>
+ 
+    result = checker(critique_prompt, max_new_tokens=<span class="num">5</span>, temperature=<span class="num">0.0</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    answer = result.split(<span class="str">"Answer YES or NO only:"</span>)[-<span class="num">1</span>].strip().upper()
+ 
+    <span class="kw">if</span> <span class="str">"YES"</span> <span class="kw">in</span> answer:
+        <span class="kw">return</span> <span class="str">"violated"</span>, rule[<span class="str">"rule_id"</span>]
+    <span class="kw">return</span> <span class="str">"ok"</span>, <span class="kw">None</span></code></pre>
+ 
+  <h2>Step 3 — Check for valid alternative purpose</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">def</span> <span class="fn">check_valid_purpose</span>(user_message, rule):
+    <span class="str">"""
+    Returns True if user has a legitimate purpose despite violating the surface rule.
+    e.g. a nurse asking about medication overdose thresholds = valid medical purpose
+    """</span>
+    allowed = <span class="str">", "</span>.join(rule[<span class="str">"allowed_purposes"</span>])
+    purpose_prompt = <span class="fn">f</span><span class="str">"""Does this user message suggest a legitimate purpose from this list: {allowed}?
+ 
+User message: {user_message}
+ 
+Answer YES if there is a clearly legitimate purpose from the list, NO otherwise. Answer YES or NO only:"""</span>
+ 
+    result = checker(purpose_prompt, max_new_tokens=<span class="num">5</span>, temperature=<span class="num">0.0</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    answer = result.split(<span class="str">"YES or NO only:"</span>)[-<span class="num">1</span>].strip().upper()
+    <span class="kw">return</span> <span class="str">"YES"</span> <span class="kw">in</span> answer</code></pre>
+ 
+  <h2>Step 4 — The revision function (rewrite to comply)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">def</span> <span class="fn">revise_response</span>(user_message, draft_response, violated_rule, generator):
+    <span class="str">"""
+    Ask the model to rewrite its answer to satisfy the rule
+    while still being helpful to the user's legitimate purpose.
+    """</span>
+    revise_prompt = <span class="fn">f</span><span class="str">"""The following response violated this rule: {violated_rule['description']}
+ 
+Original user question: {user_message}
+Violating response: {draft_response}
+ 
+Rewrite the response to be helpful for any legitimate purpose the user might have,
+while strictly following this rule: {violated_rule['description']}
+Do NOT include anything that violates the rule. Be helpful where you can.
+ 
+Revised response:"""</span>
+ 
+    revised = generator(revise_prompt, max_new_tokens=<span class="num">200</span>, temperature=<span class="num">0.7</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    <span class="kw">return</span> revised.split(<span class="str">"Revised response:"</span>)[-<span class="num">1</span>].strip()</code></pre>
+ 
+  <h2>Step 5 — The full constitutional pipeline</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">def</span> <span class="fn">constitutional_generate</span>(user_message, generator, max_revisions=<span class="num">2</span>):
+    <span class="str">"""
+    Full pipeline:
+    1. Generate draft
+    2. Check all constitution rules
+    3. If violation: check for valid purpose
+       - Valid purpose → revise and re-check
+       - No valid purpose → polite refusal
+    4. Return safe final answer
+    """</span>
+    <span class="cmt"># Step 1: generate draft answer</span>
+    draft = generator(user_message, max_new_tokens=<span class="num">300</span>, temperature=<span class="num">0.7</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    current_response = draft
+ 
+    <span class="cmt"># Step 2: check all rules</span>
+    <span class="kw">for</span> revision_round <span class="kw">in</span> range(max_revisions):
+        violations = []
+        <span class="kw">for</span> rule <span class="kw">in</span> CONSTITUTION:
+            status, rule_id = check_rule(user_message, current_response, rule)
+            <span class="kw">if</span> status == <span class="str">"violated"</span>:
+                violations.append(rule)
+ 
+        <span class="kw">if</span> <span class="kw">not</span> violations:
+            <span class="kw">return</span> current_response  <span class="cmt"># ✅ all rules satisfied</span>
+ 
+        <span class="cmt"># Step 3: handle violations</span>
+        <span class="kw">for</span> violated_rule <span class="kw">in</span> violations:
+            has_valid_purpose = check_valid_purpose(user_message, violated_rule)
+ 
+            <span class="kw">if</span> has_valid_purpose:
+                <span class="cmt"># Rewrite to help with legitimate purpose</span>
+                current_response = revise_response(user_message, current_response, violated_rule, generator)
+            <span class="kw">else</span>:
+                <span class="cmt"># Hard refusal — no valid purpose found</span>
+                <span class="kw">return</span> <span class="fn">f</span><span class="str">"{violated_rule['refusal_message']}\n\nIf you have a specific legitimate purpose, please describe it and I'll try to help appropriately."</span>
+ 
+    <span class="kw">return</span> current_response  <span class="cmt"># return best revision after max rounds</span>
+ 
+<span class="cmt"># Usage:</span>
+generator = pipeline(<span class="str">"text-generation"</span>, model=<span class="str">"./my-model"</span>)
+response = constitutional_generate(<span class="str">"How do I pick a lock?"</span>, generator)
+print(response)
+<span class="cmt"># → Explains lockpicking for locksmiths / people locked out of their own home,</span>
+<span class="cmt"># → but declines to explain bypassing security systems illegally</span></code></pre>
+ 
+  <div class="callout callout-green">This is how Claude, Anthropic's model, works. The constitution you write defines your model's values. Write it carefully — it becomes the model's moral framework.</div>
+ 
+  <h2>Training CAI (Reinforcement from AI Feedback — RLAIF)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Instead of human labelers scoring responses, use your constitution to auto-score</span>
+<span class="kw">def</span> <span class="fn">constitutional_score</span>(user_message, response):
+    <span class="str">"""Score a response: 1.0 = fully compliant, 0.0 = all rules violated"""</span>
+    violations = <span class="num">0</span>
+    <span class="kw">for</span> rule <span class="kw">in</span> CONSTITUTION:
+        status, _ = check_rule(user_message, response, rule)
+        <span class="kw">if</span> status == <span class="str">"violated"</span>:
+            violations += <span class="num">1</span>
+    <span class="kw">return</span> <span class="num">1.0</span> - (violations / len(CONSTITUTION))
+ 
+<span class="cmt"># Generate multiple responses, keep the best one (Best-of-N sampling)</span>
+<span class="kw">def</span> <span class="fn">best_of_n</span>(user_message, generator, n=<span class="num">4</span>):
+    candidates = [
+        generator(user_message, max_new_tokens=<span class="num">300</span>, temperature=<span class="num">0.8</span>, do_sample=<span class="kw">True</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+        <span class="kw">for</span> _ <span class="kw">in</span> range(n)
+    ]
+    scores = [constitutional_score(user_message, c) <span class="kw">for</span> c <span class="kw">in</span> candidates]
+    <span class="kw">return</span> candidates[scores.index(max(scores))]  <span class="cmt"># return highest scoring</span></code></pre>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ RLHF -->
+<div id="rlhf" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-amber">alignment training</span></div>
+    <h1>RLHF & reward models — making the model prefer good answers</h1>
+    <p>Reinforcement Learning from Human Feedback. You train a second model (reward model) that scores responses, then use those scores to improve the main model using PPO or DPO.</p>
+  </div>
+ 
+  <h2>The 3-phase pipeline</h2>
+  <div class="diagram-box">
+    <div class="flow-row"><div class="flow-node highlight">Phase 1</div><div class="flow-arrow">→</div><div class="flow-node">Supervised fine-tune (SFT)</div><div class="flow-label" style="margin-left:8px">train on examples of good responses</div></div>
+    <div class="flow-row"><div class="flow-node highlight">Phase 2</div><div class="flow-arrow">→</div><div class="flow-node">Train reward model (RM)</div><div class="flow-label" style="margin-left:8px">learns to score which responses are better</div></div>
+    <div class="flow-row"><div class="flow-node highlight">Phase 3</div><div class="flow-arrow">→</div><div class="flow-node">PPO or DPO</div><div class="flow-label" style="margin-left:8px">use RM to optimize the SFT model</div></div>
+  </div>
+ 
+  <h2>Phase 1: Supervised Fine-Tuning (SFT)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+ 
+<span class="cmt"># Your instruction-following dataset</span>
+sft_data = [
+    {<span class="str">"prompt"</span>: <span class="str">"Write a Python function to reverse a list"</span>,
+     <span class="str">"response"</span>: <span class="str">"```python\ndef reverse_list(lst):\n    return lst[::-1]\n```"</span>},
+    {<span class="str">"prompt"</span>: <span class="str">"What is the capital of France?"</span>,
+     <span class="str">"response"</span>: <span class="str">"The capital of France is Paris."</span>},
+    <span class="cmt"># ... thousands more examples</span>
+]
+ 
+<span class="cmt"># Format as instruction-following template (ChatML format)</span>
+<span class="kw">def</span> <span class="fn">format_chatml</span>(example):
+    text = <span class="fn">f</span><span class="str">"&lt;|im_start|&gt;user\n{example['prompt']}&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n{example['response']}&lt;|im_end|&gt;"</span>
+    <span class="kw">return</span> {<span class="str">"text"</span>: text}
+ 
+dataset = Dataset.from_list(sft_data).map(format_chatml)</code></pre>
+ 
+  <h2>Phase 2: Reward Model — learns what "good" means</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">RewardModel</span>(nn.Module):
+    <span class="str">"""Takes a (prompt, response) pair, outputs a scalar reward score."""</span>
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, base_model_name=<span class="str">"gpt2"</span>):
+        super().__init__()
+        self.base = AutoModelForCausalLM.from_pretrained(base_model_name)
+        <span class="cmt"># Replace LM head with a scalar reward head</span>
+        self.reward_head = nn.Linear(self.base.config.n_embd, <span class="num">1</span>)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, input_ids, attention_mask):
+        outputs = self.base(input_ids, attention_mask=attention_mask, output_hidden_states=<span class="kw">True</span>)
+        last_hidden = outputs.hidden_states[-<span class="num">1</span>][:, -<span class="num">1</span>, :]  <span class="cmt"># last token's hidden state</span>
+        <span class="kw">return</span> self.reward_head(last_hidden).squeeze(-<span class="num">1</span>)     <span class="cmt"># scalar per item</span>
+ 
+<span class="cmt"># Training data: pairs of (chosen, rejected) responses for same prompt</span>
+<span class="cmt"># Your human raters pick which is better</span>
+comparison_data = [
+    {
+        <span class="str">"prompt"</span>: <span class="str">"Explain gravity"</span>,
+        <span class="str">"chosen"</span>: <span class="str">"Gravity is a force that attracts objects with mass toward each other..."</span>,
+        <span class="str">"rejected"</span>: <span class="str">"idk its like stuff falls down lol"</span>
+    },
+]
+ 
+<span class="cmt"># Reward model loss: make chosen score > rejected score</span>
+<span class="kw">def</span> <span class="fn">reward_loss</span>(chosen_reward, rejected_reward):
+    <span class="kw">return</span> -torch.log(torch.sigmoid(chosen_reward - rejected_reward)).mean()</code></pre>
+ 
+  <h2>Phase 3 (easier): Direct Preference Optimization (DPO)</h2>
+  <p>DPO skips training a separate reward model entirely. You directly fine-tune the language model on preference pairs. Much simpler, works almost as well as full RLHF.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code>!pip install trl -q  <span class="cmt"># HuggingFace's RLHF / DPO library</span>
+ 
+<span class="kw">from</span> trl <span class="kw">import</span> DPOTrainer, DPOConfig
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+ 
+<span class="cmt"># Dataset needs: prompt, chosen (better response), rejected (worse response)</span>
+dpo_data = Dataset.from_list([
+    {
+        <span class="str">"prompt"</span>: <span class="str">"How do I sort a Python list?"</span>,
+        <span class="str">"chosen"</span>: <span class="str">"Use the built-in `sorted()` function or `.sort()` method:\n```python\nmy_list = [3,1,2]\nsorted_list = sorted(my_list)  # returns new list\nmy_list.sort()  # sorts in place\n```"</span>,
+        <span class="str">"rejected"</span>: <span class="str">"You can sort it using a loop I think"</span>
+    },
+])
+ 
+dpo_config = DPOConfig(
+    output_dir=<span class="str">"./dpo-model"</span>,
+    num_train_epochs=<span class="num">1</span>,
+    per_device_train_batch_size=<span class="num">2</span>,
+    beta=<span class="num">0.1</span>,           <span class="cmt"># how strongly to enforce preferences (0.1-0.5 typical)</span>
+    learning_rate=<span class="num">5e-5</span>,
+)
+ 
+trainer = DPOTrainer(
+    model=model,           <span class="cmt"># your SFT model</span>
+    args=dpo_config,
+    train_dataset=dpo_data,
+    tokenizer=tokenizer,
+)
+trainer.train()</code></pre>
+  <div class="callout callout-amber">For your model: use <strong>DPO</strong>, not full RLHF. Same effect, 10x simpler to implement. You still need preference data (pairs of good/bad responses for same prompt). Create ~500 pairs manually or use GPT-4 to auto-generate them.</div>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ VISION -->
+<div id="vision" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-teal">vision</span></div>
+    <h1>Image & video understanding — Vision Transformer (ViT)</h1>
+    <p>Images are cut into patches (like tokens). Each patch becomes a vector. A transformer processes them exactly like text tokens. For video: process frames, add temporal attention.</p>
+  </div>
+ 
+  <h2>ViT — how image patches become tokens</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+ 
+<span class="kw">class</span> <span class="cls">VisionTransformer</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, img_size=<span class="num">224</span>, patch_size=<span class="num">16</span>, d_model=<span class="num">768</span>, n_heads=<span class="num">12</span>, n_layers=<span class="num">12</span>):
+        super().__init__()
+        self.patch_size = patch_size
+        n_patches = (img_size // patch_size) ** <span class="num">2</span>  <span class="cmt"># 224/16 = 14 → 14×14 = 196 patches</span>
+        patch_dim = <span class="num">3</span> * patch_size * patch_size      <span class="cmt"># RGB × 16 × 16 = 768</span>
+ 
+        <span class="cmt"># Turn each patch into an embedding vector</span>
+        self.patch_embed = nn.Linear(patch_dim, d_model)
+        <span class="cmt"># Special [CLS] token for whole-image representation</span>
+        self.cls_token = nn.Parameter(torch.randn(<span class="num">1</span>, <span class="num">1</span>, d_model))
+        <span class="cmt"># Learned position embeddings for each patch</span>
+        self.pos_embed = nn.Parameter(torch.randn(<span class="num">1</span>, n_patches + <span class="num">1</span>, d_model))
+ 
+        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=n_heads, batch_first=<span class="kw">True</span>)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.norm = nn.LayerNorm(d_model)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        B, C, H, W = x.shape  <span class="cmt"># (batch, 3, 224, 224)</span>
+        p = self.patch_size
+ 
+        <span class="cmt"># Slice image into patches and flatten each</span>
+        x = x.unfold(<span class="num">2</span>, p, p).unfold(<span class="num">3</span>, p, p)     <span class="cmt"># (B, 3, 14, 14, 16, 16)</span>
+        x = x.contiguous().view(B, -<span class="num">1</span>, <span class="num">3</span>*p*p)     <span class="cmt"># (B, 196, 768) — 196 patch tokens</span>
+        x = self.patch_embed(x)                    <span class="cmt"># (B, 196, d_model)</span>
+ 
+        <span class="cmt"># Prepend CLS token, add position embeddings</span>
+        cls = self.cls_token.expand(B, -<span class="num">1</span>, -<span class="num">1</span>)
+        x = torch.cat([cls, x], dim=<span class="num">1</span>)            <span class="cmt"># (B, 197, d_model)</span>
+        x = x + self.pos_embed
+ 
+        x = self.transformer(x)
+        x = self.norm(x)
+ 
+        <span class="kw">return</span> x[:, <span class="num">0</span>], x[:, <span class="num">1</span>:]  <span class="cmt"># (cls_feature, patch_features) → for classification and captioning</span></code></pre>
+ 
+  <h2>Use a pretrained ViT (recommended — don't train from scratch)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> CLIPProcessor, CLIPModel
+<span class="kw">from</span> PIL <span class="kw">import</span> Image
+<span class="kw">import</span> requests
+ 
+<span class="cmt"># CLIP: image encoder + text encoder trained together (contrastive learning)</span>
+model = CLIPModel.from_pretrained(<span class="str">"openai/clip-vit-base-patch32"</span>).to(<span class="str">"cuda"</span>)
+processor = CLIPProcessor.from_pretrained(<span class="str">"openai/clip-vit-base-patch32"</span>)
+ 
+<span class="cmt"># Load an image</span>
+image = Image.open(<span class="str">"photo.jpg"</span>)
+ 
+<span class="cmt"># Get image features (for use in LLaVA-style vision-language model)</span>
+inputs = processor(images=image, return_tensors=<span class="str">"pt"</span>).to(<span class="str">"cuda"</span>)
+image_features = model.get_image_features(**inputs)  <span class="cmt"># (1, 512) — rich visual embedding</span>
+ 
+<span class="cmt"># Image-text similarity (zero-shot image classification)</span>
+texts = [<span class="str">"a photo of a cat"</span>, <span class="str">"a photo of a dog"</span>, <span class="str">"a photo of a car"</span>]
+inputs = processor(text=texts, images=image, return_tensors=<span class="str">"pt"</span>, padding=<span class="kw">True</span>).to(<span class="str">"cuda"</span>)
+outputs = model(**inputs)
+probs = outputs.logits_per_image.softmax(dim=<span class="num">1</span>)
+print(<span class="fn">f</span><span class="str">"Predicted: {texts[probs.argmax()]}"</span>)</code></pre>
+ 
+  <h2>LLaVA — use ViT features to make LLM understand images</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> LlavaNextProcessor, LlavaNextForConditionalGeneration
+<span class="kw">import</span> torch
+ 
+<span class="cmt"># LLaVA = ViT (vision encoder) + projection layer + LLM</span>
+model = LlavaNextForConditionalGeneration.from_pretrained(
+    <span class="str">"llava-hf/llava-v1.6-mistral-7b-hf"</span>,
+    torch_dtype=torch.float16,
+    load_in_4bit=<span class="kw">True</span>  <span class="cmt"># 4-bit quantization to fit on T4</span>
+)
+processor = LlavaNextProcessor.from_pretrained(<span class="str">"llava-hf/llava-v1.6-mistral-7b-hf"</span>)
+ 
+<span class="cmt"># Describe an image</span>
+image = Image.open(<span class="str">"photo.jpg"</span>)
+conversation = [{
+    <span class="str">"role"</span>: <span class="str">"user"</span>,
+    <span class="str">"content"</span>: [{<span class="str">"type"</span>: <span class="str">"image"</span>}, {<span class="str">"type"</span>: <span class="str">"text"</span>, <span class="str">"text"</span>: <span class="str">"What is in this image?"</span>}]
+}]
+prompt = processor.apply_chat_template(conversation, add_generation_prompt=<span class="kw">True</span>)
+inputs = processor(images=image, text=prompt, return_tensors=<span class="str">"pt"</span>).to(<span class="str">"cuda"</span>)
+ 
+output = model.generate(**inputs, max_new_tokens=<span class="num">200</span>)
+print(processor.decode(output[<span class="num">0</span>], skip_special_tokens=<span class="kw">True</span>))</code></pre>
+ 
+  <h2>Video understanding — temporal attention over frames</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> cv2
+<span class="kw">import</span> torch
+ 
+<span class="kw">def</span> <span class="fn">extract_frames</span>(video_path, n_frames=<span class="num">8</span>):
+    <span class="str">"""Sample n_frames evenly from a video file"""</span>
+    cap = cv2.VideoCapture(video_path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    indices = [int(i * total / n_frames) <span class="kw">for</span> i <span class="kw">in</span> range(n_frames)]
+    frames = []
+    <span class="kw">for</span> idx <span class="kw">in</span> indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        <span class="kw">if</span> ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(Image.fromarray(frame))
+    cap.release()
+    <span class="kw">return</span> frames
+ 
+<span class="cmt"># Process each frame through CLIP, then apply temporal attention</span>
+frames = extract_frames(<span class="str">"video.mp4"</span>, n_frames=<span class="num">8</span>)
+frame_features = []
+<span class="kw">for</span> frame <span class="kw">in</span> frames:
+    inputs = processor(images=frame, return_tensors=<span class="str">"pt"</span>).to(<span class="str">"cuda"</span>)
+    feat = model.get_image_features(**inputs)  <span class="cmt"># (1, 512)</span>
+    frame_features.append(feat)
+ 
+<span class="cmt"># Stack: (8, 512) — 8 frames, each described by 512-dim vector</span>
+video_tensor = torch.stack(frame_features, dim=<span class="num">1</span>)  <span class="cmt"># (1, 8, 512)</span>
+ 
+<span class="cmt"># Apply temporal self-attention across frames</span>
+temporal_attn = nn.MultiheadAttention(<span class="num">512</span>, num_heads=<span class="num">8</span>, batch_first=<span class="kw">True</span>).to(<span class="str">"cuda"</span>)
+video_understanding, _ = temporal_attn(video_tensor, video_tensor, video_tensor)
+<span class="cmt"># video_understanding[:, 0, :] = whole-video summary vector</span></code></pre>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ IMAGEGEN -->
+<div id="imagegen" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-pink">generation</span></div>
+    <h1>Image & video generation — Diffusion models</h1>
+    <p>Diffusion models learn to reverse a process of adding noise. Training: add noise to images step by step. Inference: start from pure noise, predict and remove noise step by step until an image forms.</p>
+  </div>
+ 
+  <h2>Use Stable Diffusion via diffusers (fastest path)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> diffusers <span class="kw">import</span> StableDiffusionPipeline, DPMSolverMultistepScheduler
+<span class="kw">import</span> torch
+ 
+<span class="cmt"># Load SD 2.1 — fits on T4 in float16</span>
+pipe = StableDiffusionPipeline.from_pretrained(
+    <span class="str">"stabilityai/stable-diffusion-2-1"</span>,
+    torch_dtype=torch.float16
+).to(<span class="str">"cuda"</span>)
+ 
+<span class="cmt"># Faster sampler (20 steps instead of 50)</span>
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+pipe.enable_attention_slicing()  <span class="cmt"># saves memory on T4</span>
+ 
+<span class="cmt"># Generate image</span>
+result = pipe(
+    prompt=<span class="str">"a golden retriever sitting in a field of sunflowers, photorealistic, 8k"</span>,
+    negative_prompt=<span class="str">"blurry, low quality, cartoon"</span>,
+    num_inference_steps=<span class="num">20</span>,
+    guidance_scale=<span class="num">7.5</span>,     <span class="cmt"># how closely to follow prompt (7-12 typical)</span>
+    width=<span class="num">512</span>, height=<span class="num">512</span>
+)
+result.images[<span class="num">0</span>].save(<span class="str">"output.png"</span>)</code></pre>
+ 
+  <h2>Fine-tune diffusion on your own image style (DreamBooth)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Train SD to generate YOUR specific subject/style</span>
+<span class="cmt"># You need: 3-20 images of the subject</span>
+ 
+!accelerate launch train_dreambooth.py \
+  --pretrained_model_name_or_path="stabilityai/stable-diffusion-2-1" \
+  --instance_data_dir="./my_images" \        <span class="cmt"># your 5-20 images here</span>
+  --output_dir="./my-diffusion-model" \
+  --instance_prompt="a photo of sks person" \ <span class="cmt"># "sks" = unique token for your subject</span>
+  --resolution=512 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=1 \
+  --learning_rate=5e-6 \
+  --max_train_steps=<span class="num">400</span>                       <span class="cmt"># 400-800 steps typical for DreamBooth</span></code></pre>
+ 
+  <h2>Text-to-image with SDXL (higher quality, more memory)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> diffusers <span class="kw">import</span> StableDiffusionXLPipeline
+ 
+<span class="cmt"># SDXL needs ~12GB — right at T4's limit. Use with 4-bit or CPU offload</span>
+pipe = StableDiffusionXLPipeline.from_pretrained(
+    <span class="str">"stabilityai/stable-diffusion-xl-base-1.0"</span>,
+    torch_dtype=torch.float16,
+    use_safetensors=<span class="kw">True</span>
+).to(<span class="str">"cuda"</span>)
+pipe.enable_model_cpu_offload()  <span class="cmt"># offloads parts to CPU to save VRAM</span>
+ 
+image = pipe(
+    prompt=<span class="str">"majestic mountain landscape, oil painting style, detailed"</span>,
+    num_inference_steps=<span class="num">30</span>,
+    width=<span class="num">1024</span>, height=<span class="num">1024</span>
+).images[<span class="num">0</span>]</code></pre>
+ 
+  <h2>Video generation — AnimateDiff (add motion to SD)</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> diffusers <span class="kw">import</span> AnimateDiffPipeline, MotionAdapter, EulerDiscreteScheduler
+<span class="kw">from</span> diffusers.utils <span class="kw">import</span> export_to_gif
+ 
+adapter = MotionAdapter.from_pretrained(<span class="str">"guoyww/animatediff-motion-adapter-v1-5-2"</span>)
+pipe = AnimateDiffPipeline.from_pretrained(
+    <span class="str">"emilianJR/epiCRealism"</span>,   <span class="cmt"># base SD model</span>
+    motion_adapter=adapter,
+    torch_dtype=torch.float16
+).to(<span class="str">"cuda"</span>)
+pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
+ 
+<span class="cmt"># Generates 16 frames = ~1 second video at 16fps</span>
+output = pipe(
+    prompt=<span class="str">"a cat walking in a garden, cinematic, 4k"</span>,
+    negative_prompt=<span class="str">"bad quality, blurry"</span>,
+    num_frames=<span class="num">16</span>,
+    guidance_scale=<span class="num">7.5</span>,
+    num_inference_steps=<span class="num">25</span>,
+)
+export_to_gif(output.frames[<span class="num">0</span>], <span class="str">"animation.gif"</span>)</code></pre>
+ 
+  <h2>How the diffusion process works — train your own small version</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+ 
+<span class="cmt"># The core of diffusion: add noise, then teach model to predict the noise</span>
+<span class="kw">class</span> <span class="cls">SimpleDiffusion</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, T=<span class="num">1000</span>):
+        self.T = T
+        <span class="cmt"># Beta schedule: how much noise to add at each step</span>
+        self.betas = torch.linspace(<span class="num">1e-4</span>, <span class="num">0.02</span>, T)
+        self.alphas = <span class="num">1</span> - self.betas
+        self.alpha_bars = torch.cumprod(self.alphas, dim=<span class="num">0</span>)  <span class="cmt"># cumulative product</span>
+ 
+    <span class="kw">def</span> <span class="fn">add_noise</span>(self, x0, t):
+        <span class="str">"""Add t steps of noise to clean image x0"""</span>
+        sqrt_alpha_bar = self.alpha_bars[t].sqrt()
+        sqrt_one_minus = (<span class="num">1</span> - self.alpha_bars[t]).sqrt()
+        noise = torch.randn_like(x0)
+        noisy = sqrt_alpha_bar * x0 + sqrt_one_minus * noise
+        <span class="kw">return</span> noisy, noise  <span class="cmt"># noisy image + the noise we added (training target)</span>
+ 
+    <span class="kw">def</span> <span class="fn">train_step</span>(self, model, x0, optimizer):
+        <span class="str">"""One training step: add noise, predict it, compute loss"""</span>
+        t = torch.randint(<span class="num">0</span>, self.T, (x0.shape[<span class="num">0</span>],))  <span class="cmt"># random timestep</span>
+        noisy, noise = self.add_noise(x0, t)
+ 
+        <span class="cmt"># Model tries to predict the noise — this is all of diffusion training!</span>
+        predicted_noise = model(noisy, t)
+        loss = nn.MSELoss()(predicted_noise, noise)
+ 
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        <span class="kw">return</span> loss.item()
+ 
+    <span class="kw">def</span> <span class="fn">sample</span>(self, model, shape):
+        <span class="str">"""Generate: start from noise, iteratively denoise"""</span>
+        x = torch.randn(shape)  <span class="cmt"># start from pure noise</span>
+        <span class="kw">for</span> t <span class="kw">in</span> reversed(range(self.T)):
+            predicted_noise = model(x, torch.tensor([t]))
+            alpha = self.alphas[t]
+            alpha_bar = self.alpha_bars[t]
+            <span class="cmt"># One denoising step (DDPM update rule)</span>
+            x = (<span class="num">1</span>/alpha.sqrt()) * (x - ((<span class="num">1</span>-alpha)/(<span class="num">1</span>-alpha_bar).sqrt()) * predicted_noise)
+            <span class="kw">if</span> t > <span class="num">0</span>:
+                x += self.betas[t].sqrt() * torch.randn_like(x)  <span class="cmt"># add small noise</span>
+        <span class="kw">return</span> x  <span class="cmt"># final generated image</span></code></pre>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ MULTIMODAL -->
+<div id="multimodal" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-teal">fusion</span></div>
+    <h1>Multimodal fusion — connecting vision to language</h1>
+    <p>Three ways to make your language model understand images: early fusion (merge at input), late fusion (merge at output), and cross-attention fusion (language attends to image throughout).</p>
+  </div>
+ 
+  <h2>Architecture 1: Projection layer fusion (LLaVA style) — recommended</h2>
+  <p>A linear layer maps image features into the same space as text tokens. Image patches literally become extra "tokens" the LLM can attend to.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">class</span> <span class="cls">VisionLanguageModel</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, vision_dim=<span class="num">768</span>, llm_dim=<span class="num">2048</span>):
+        super().__init__()
+        <span class="cmt"># Frozen vision encoder (CLIP ViT-L)</span>
+        self.vision_encoder = CLIPModel.from_pretrained(<span class="str">"openai/clip-vit-large-patch14"</span>)
+        <span class="kw">for</span> p <span class="kw">in</span> self.vision_encoder.parameters():
+            p.requires_grad = <span class="kw">False</span>  <span class="cmt"># freeze — don't touch vision weights</span>
+ 
+        <span class="cmt"># Projection: map image patches to LLM embedding space</span>
+        <span class="cmt"># This is the only part that trains in stage 1</span>
+        self.projection = nn.Sequential(
+            nn.Linear(vision_dim, llm_dim),
+            nn.GELU(),
+            nn.Linear(llm_dim, llm_dim)
+        )
+ 
+        <span class="cmt"># Language model (also frozen in stage 1, unfrozen in stage 2)</span>
+        self.llm = AutoModelForCausalLM.from_pretrained(<span class="str">"microsoft/phi-2"</span>)
+ 
+    <span class="kw">def</span> <span class="fn">forward</span>(self, input_ids, pixel_values=<span class="kw">None</span>, attention_mask=<span class="kw">None</span>):
+        text_embeds = self.llm.get_input_embeddings()(input_ids)
+ 
+        <span class="kw">if</span> pixel_values <span class="kw">is not None</span>:
+            <span class="cmt"># Get image patch features from ViT</span>
+            vision_out = self.vision_encoder.vision_model(pixel_values)
+            image_features = vision_out.last_hidden_state[:, <span class="num">1</span>:]  <span class="cmt"># skip CLS token → (B, 256, 768)</span>
+ 
+            <span class="cmt"># Project to LLM's embedding dimension</span>
+            image_embeds = self.projection(image_features)  <span class="cmt"># (B, 256, llm_dim)</span>
+ 
+            <span class="cmt"># Concatenate: [image tokens] [text tokens]</span>
+            <span class="cmt"># This is it — image patches are now text-like tokens!</span>
+            combined_embeds = torch.cat([image_embeds, text_embeds], dim=<span class="num">1</span>)
+        <span class="kw">else</span>:
+            combined_embeds = text_embeds
+ 
+        return self.llm(inputs_embeds=combined_embeds, attention_mask=attention_mask)</code></pre>
+ 
+  <h2>Two-stage training for your VLM</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt">## Stage 1: Train only the projection layer</span>
+<span class="cmt">## Data: (image, caption) pairs — e.g. COCO captions dataset</span>
+<span class="cmt">## Goal: teach projection to align image features with text space</span>
+ 
+<span class="kw">for</span> param <span class="kw">in</span> vlm.vision_encoder.parameters(): param.requires_grad = <span class="kw">False</span>
+<span class="kw">for</span> param <span class="kw">in</span> vlm.llm.parameters(): param.requires_grad = <span class="kw">False</span>
+<span class="kw">for</span> param <span class="kw">in</span> vlm.projection.parameters(): param.requires_grad = <span class="kw">True</span>  <span class="cmt"># only this trains</span>
+ 
+<span class="cmt">## Stage 2: Fine-tune LLM + projection for instruction following</span>
+<span class="cmt">## Data: (image, question, answer) triples — visual QA format</span>
+<span class="cmt">## Goal: "Given this image, answer questions about it"</span>
+ 
+<span class="kw">for</span> param <span class="kw">in</span> vlm.llm.parameters(): param.requires_grad = <span class="kw">True</span>   <span class="cmt"># unfreeze LLM</span>
+ 
+<span class="cmt">## Use LoRA (Parameter Efficient Fine-Tuning) on LLM to save memory</span>
+<span class="kw">from</span> peft <span class="kw">import</span> LoraConfig, get_peft_model
+ 
+lora_config = LoraConfig(
+    r=<span class="num">8</span>,           <span class="cmt"># rank of update matrices</span>
+    lora_alpha=<span class="num">16</span>,  <span class="cmt"># scaling factor</span>
+    target_modules=[<span class="str">"q_proj"</span>, <span class="str">"v_proj"</span>],  <span class="cmt"># apply to Q and V attention projections</span>
+    lora_dropout=<span class="num">0.05</span>,
+    bias=<span class="str">"none"</span>,
+    task_type=<span class="str">"CAUSAL_LM"</span>
+)
+vlm.llm = get_peft_model(vlm.llm, lora_config)
+vlm.llm.print_trainable_parameters()
+<span class="cmt"># trainable params: 4,194,304 || all params: 2,784,991,232 || trainable%: 0.15</span>
+<span class="cmt"># Only 0.15% of weights train — massive memory saving</span></code></pre>
+ 
+  <h2>Architecture 2: Q-Former fusion (BLIP-2 style)</h2>
+  <p>A small transformer with learnable query tokens extracts fixed-length representations from the variable-length image features before passing to the LLM.</p>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> Blip2Processor, Blip2ForConditionalGeneration
+ 
+<span class="cmt"># BLIP-2: ViT + Q-Former + LLM — all packaged</span>
+model = Blip2ForConditionalGeneration.from_pretrained(
+    <span class="str">"Salesforce/blip2-opt-2.7b"</span>,
+    load_in_8bit=<span class="kw">True</span>  <span class="cmt"># 8-bit for T4</span>
+)
+processor = Blip2Processor.from_pretrained(<span class="str">"Salesforce/blip2-opt-2.7b"</span>)
+ 
+image = Image.open(<span class="str">"photo.jpg"</span>)
+inputs = processor(image, text=<span class="str">"Question: What color is the car? Answer:"</span>, return_tensors=<span class="str">"pt"</span>).to(<span class="str">"cuda"</span>)
+output = model.generate(**inputs, max_new_tokens=<span class="num">50</span>)
+print(processor.decode(output[<span class="num">0</span>], skip_special_tokens=<span class="kw">True</span>))</code></pre>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ BUILDER -->
+<div id="builder" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-blue">your model</span></div>
+    <h1>Design your model — pick your stack</h1>
+    <p>Based on everything above, here's the recommended architecture for your specific model (chat + code + image/video understanding + generation). Check what you want to include.</p>
+  </div>
+ 
+  <h2>Recommended stack for your use case</h2>
+ 
+  <div class="builder-grid">
+    <div class="builder-category">
+      <h4>Core LLM (chat + code)</h4>
+      <label class="choice-row picked" id="row-gqa">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>Phi-3-mini (3.8B, 4-bit)</strong><span>Best quality/size on T4. GQA + RoPE built in. Fits in 8GB VRAM quantized.</span></div>
+      </label>
+      <label class="choice-row" id="row-gpt2">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>GPT-2 custom (from scratch)</strong><span>Train yourself. 124M params. Good for learning, not production.</span></div>
+      </label>
+      <label class="choice-row" id="row-llama">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>Llama 3.2 (1B, 4-bit)</strong><span>Tiny, fast. Good for mobile/edge. Limited reasoning.</span></div>
+      </label>
+    </div>
+ 
+    <div class="builder-category">
+      <h4>Vision understanding</h4>
+      <label class="choice-row picked">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>LLaVA-Next (projection)</strong><span>CLIP ViT-L + projection layer + LLM. Best image QA on T4.</span></div>
+      </label>
+      <label class="choice-row">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>BLIP-2 (Q-Former)</strong><span>Alternative. Better at image captioning tasks.</span></div>
+      </label>
+    </div>
+ 
+    <div class="builder-category">
+      <h4>Image generation</h4>
+      <label class="choice-row picked">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>SD 2.1 (text-to-image)</strong><span>Stable Diffusion 2.1. Fits on T4. 20 steps = ~5s.</span></div>
+      </label>
+      <label class="choice-row">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>SDXL (higher quality)</strong><span>Needs CPU offload on T4. Slower but much better quality.</span></div>
+      </label>
+    </div>
+ 
+    <div class="builder-category">
+      <h4>Safety system</h4>
+      <label class="choice-row picked">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>Constitutional AI</strong><span>Write your rules, auto-check every response before sending.</span></div>
+      </label>
+      <label class="choice-row">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>DPO alignment</strong><span>Train on preference pairs to make model prefer good responses.</span></div>
+      </label>
+    </div>
+ 
+    <div class="builder-category">
+      <h4>Attention variant</h4>
+      <label class="choice-row picked">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>GQA (2 KV heads)</strong><span>4x less KV cache. Same quality as MHA. Use with Flash Attention.</span></div>
+      </label>
+      <label class="choice-row">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>Flash Attention 2</strong><span>2-4x faster training. Drop-in replacement. Highly recommended.</span></div>
+      </label>
+    </div>
+ 
+    <div class="builder-category">
+      <h4>Fine-tuning method</h4>
+      <label class="choice-row picked">
+        <input type="checkbox" checked onchange="updateBuilder()">
+        <div class="choice-label"><strong>LoRA (r=8)</strong><span>Train 0.1% of parameters. Same quality as full fine-tune. Essential on T4.</span></div>
+      </label>
+      <label class="choice-row">
+        <input type="checkbox" onchange="updateBuilder()">
+        <div class="choice-label"><strong>QLoRA (4-bit + LoRA)</strong><span>Even smaller memory. Slightly slower. Use if running out of VRAM.</span></div>
+      </label>
+    </div>
+  </div>
+ 
+  <div class="builder-output">
+    <h4>Your model architecture summary</h4>
+    <div id="builder-text" style="font-size:13px;color:var(--muted);line-height:1.8">
+      Selected: Phi-3-mini + LLaVA projection (CLIP ViT-L) + SD 2.1 + Constitutional AI + GQA + LoRA<br>
+      VRAM usage: ~12-14GB (T4 borderline — use 4-bit quantization)<br>
+      Training time: ~2-4 hours on T4 for fine-tuning with LoRA<br>
+      Deployment: HuggingFace Spaces (free) or Gradio on Colab
+    </div>
+  </div>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ TRAINING -->
+<div id="training" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-amber">training</span></div>
+    <h1>Complete training script — Colab, LoRA, your full model</h1>
+    <p>End-to-end fine-tuning script using QLoRA on Phi-3-mini. Run this on Colab T4 to fine-tune your chat+code model.</p>
+  </div>
+ 
+  <pre><div class="code-header"><span class="code-lang">python — complete training script (run in Colab T4)</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Cell 1: Install</span>
+!pip install transformers datasets peft bitsandbytes accelerate trl -q
+ 
+<span class="cmt"># Cell 2: Imports</span>
+<span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TrainingArguments
+<span class="kw">from</span> peft <span class="kw">import</span> LoraConfig, get_peft_model, TaskType
+<span class="kw">from</span> trl <span class="kw">import</span> SFTTrainer
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+ 
+<span class="cmt"># Cell 3: Load model in 4-bit</span>
+MODEL_NAME = <span class="str">"microsoft/Phi-3-mini-4k-instruct"</span>
+ 
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=<span class="kw">True</span>,
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=<span class="kw">True</span>,
+    bnb_4bit_quant_type=<span class="str">"nf4"</span>  <span class="cmt"># NormalFloat4 — best quality</span>
+)
+ 
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    quantization_config=bnb_config,
+    device_map=<span class="str">"auto"</span>,
+    trust_remote_code=<span class="kw">True</span>
+)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer.pad_token = tokenizer.eos_token
+ 
+<span class="cmt"># Cell 4: Apply LoRA</span>
+lora_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=<span class="num">8</span>,                    <span class="cmt"># rank — higher = more capacity, more memory</span>
+    lora_alpha=<span class="num">16</span>,
+    target_modules=[<span class="str">"q_proj"</span>, <span class="str">"k_proj"</span>, <span class="str">"v_proj"</span>, <span class="str">"o_proj"</span>],
+    lora_dropout=<span class="num">0.05</span>,
+    bias=<span class="str">"none"</span>
+)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+ 
+<span class="cmt"># Cell 5: Prepare your dataset</span>
+train_data = [
+    {<span class="str">"text"</span>: <span class="str">"&lt;|user|&gt;Write a function to check if a number is prime&lt;|end|&gt;\n&lt;|assistant|&gt;```python\ndef is_prime(n):\n    if n < 2: return False\n    for i in range(2, int(n**0.5)+1):\n        if n % i == 0: return False\n    return True\n```&lt;|end|&gt;"</span>},
+    {<span class="str">"text"</span>: <span class="str">"&lt;|user|&gt;Explain what a neural network is&lt;|end|&gt;\n&lt;|assistant|&gt;A neural network is a system of connected nodes that learns patterns by adjusting connection weights based on training examples.&lt;|end|&gt;"</span>},
+    <span class="cmt"># Add hundreds more examples...</span>
+]
+dataset = Dataset.from_list(train_data)
+ 
+<span class="cmt"># Cell 6: Train</span>
+training_args = TrainingArguments(
+    output_dir=<span class="str">"./my-phi3-lora"</span>,
+    num_train_epochs=<span class="num">2</span>,
+    per_device_train_batch_size=<span class="num">2</span>,
+    gradient_accumulation_steps=<span class="num">4</span>,  <span class="cmt"># effective batch = 8</span>
+    learning_rate=<span class="num">2e-4</span>,
+    warmup_ratio=<span class="num">0.05</span>,
+    logging_steps=<span class="num">10</span>,
+    save_steps=<span class="num">200</span>,
+    fp16=<span class="kw">True</span>,
+    optim=<span class="str">"paged_adamw_8bit"</span>,  <span class="cmt"># 8-bit optimizer — saves memory</span>
+    lr_scheduler_type=<span class="str">"cosine"</span>,
+)
+ 
+trainer = SFTTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=dataset,
+    dataset_text_field=<span class="str">"text"</span>,
+    max_seq_length=<span class="num">512</span>,
+    args=training_args,
+)
+ 
+trainer.train()
+ 
+<span class="cmt"># Cell 7: Save and merge LoRA weights into base model</span>
+<span class="kw">from</span> peft <span class="kw">import</span> PeftModel
+model.save_pretrained(<span class="str">"./my-phi3-lora"</span>)
+ 
+<span class="cmt"># Merge for deployment (optional — makes it a standalone model)</span>
+merged = model.merge_and_unload()
+merged.save_pretrained(<span class="str">"./my-phi3-merged"</span>)
+tokenizer.save_pretrained(<span class="str">"./my-phi3-merged"</span>)</code></pre>
+ 
+  <h2>Push to HuggingFace Hub and deploy with Gradio</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> huggingface_hub <span class="kw">import</span> login
+login(token=<span class="str">"your_hf_token"</span>)
+merged.push_to_hub(<span class="str">"your-username/my-phi3-model"</span>)
+tokenizer.push_to_hub(<span class="str">"your-username/my-phi3-model"</span>)
+ 
+<span class="cmt"># Gradio demo — runs in Colab, generates public URL</span>
+!pip install gradio -q
+<span class="kw">import</span> gradio <span class="kw">as</span> gr
+<span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+ 
+gen = pipeline(<span class="str">"text-generation"</span>, model=<span class="str">"./my-phi3-merged"</span>, device=<span class="num">0</span>)
+ 
+<span class="kw">def</span> <span class="fn">chat</span>(message, history):
+    prompt = <span class="str">"&lt;|user|&gt;"</span> + message + <span class="str">"&lt;|end|&gt;\n&lt;|assistant|&gt;"</span>
+    output = gen(prompt, max_new_tokens=<span class="num">512</span>, temperature=<span class="num">0.7</span>, do_sample=<span class="kw">True</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    <span class="kw">return</span> output.split(<span class="str">"&lt;|assistant|&gt;"</span>)[-<span class="num">1</span>].split(<span class="str">"&lt;|end|&gt;"</span>)[<span class="num">0</span>].strip()
+ 
+demo = gr.ChatInterface(fn=chat, title=<span class="str">"My AI Model"</span>)
+demo.launch(share=<span class="kw">True</span>)  <span class="cmt"># → Running on public URL: https://xxxx.gradio.live</span></code></pre>
+</div>
+ 
+<!-- ═══════════════════════════════════════════════════════ OUTPUT FORMAT -->
+<div id="output" class="page">
+  <div class="page-header">
+    <div style="margin-bottom:8px"><span class="tag tag-purple">output</span></div>
+    <h1>Claude-style structured output formatting</h1>
+    <p>How to make your model output properly formatted markdown — code in fenced blocks with language labels, structured responses, proper headings.</p>
+  </div>
+ 
+  <h2>System prompt that enforces formatting</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code>SYSTEM_PROMPT = <span class="str">"""You are a helpful AI assistant. You ALWAYS format your responses as follows:
+ 
+1. CODE: Always use fenced code blocks with the language specified:
+   ```python
+   # code here
+   ```
+   ```javascript
+   // code here
+   ```
+   ```bash
+   # commands here
+   ```
+ 
+2. STRUCTURE: Use markdown headers (## for sections, ### for subsections)
+   Use **bold** for important terms.
+   Use bullet points for lists.
+ 
+3. EXPLANATIONS: Explain what each code block does in plain text before it.
+ 
+4. ERRORS: If you cannot help, say exactly: "I can't help with [specific thing] because [reason]."
+ 
+Always be concise. No unnecessary filler text. Answer the actual question first."""</span>
+ 
+<span class="kw">def</span> <span class="fn">format_prompt</span>(user_message, system=SYSTEM_PROMPT):
+    <span class="kw">return</span> <span class="fn">f</span><span class="str">"&lt;|system|&gt;\n{system}&lt;|end|&gt;\n&lt;|user|&gt;\n{user_message}&lt;|end|&gt;\n&lt;|assistant|&gt;"</span></code></pre>
+ 
+  <h2>Post-processing: fix and validate model output</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">import</span> re
+ 
+<span class="kw">def</span> <span class="fn">clean_output</span>(raw_output):
+    <span class="str">"""Clean up model output to ensure proper markdown formatting"""</span>
+    <span class="cmt"># Remove everything before the assistant's turn</span>
+    <span class="kw">if</span> <span class="str">"&lt;|assistant|&gt;"</span> <span class="kw">in</span> raw_output:
+        raw_output = raw_output.split(<span class="str">"&lt;|assistant|&gt;"</span>)[-<span class="num">1</span>]
+    <span class="kw">if</span> <span class="str">"&lt;|end|&gt;"</span> <span class="kw">in</span> raw_output:
+        raw_output = raw_output.split(<span class="str">"&lt;|end|&gt;"</span>)[<span class="num">0</span>]
+ 
+    <span class="cmt"># Ensure code blocks have language labels</span>
+    <span class="cmt"># If model writes ``` without language, try to infer it</span>
+    <span class="kw">def</span> <span class="fn">fix_code_block</span>(match):
+        content = match.group(<span class="num">1</span>).strip()
+        <span class="cmt"># Detect language from content</span>
+        <span class="kw">if</span> <span class="str">"def "</span> <span class="kw">in</span> content <span class="kw">or</span> <span class="str">"import "</span> <span class="kw">in</span> content: lang = <span class="str">"python"</span>
+        <span class="kw">elif</span> <span class="str">"function"</span> <span class="kw">in</span> content <span class="kw">or</span> <span class="str">"const "</span> <span class="kw">in</span> content: lang = <span class="str">"javascript"</span>
+        <span class="kw">elif</span> content.startswith(<span class="str">"$"</span>) <span class="kw">or</span> content.startswith(<span class="str">"!"</span>): lang = <span class="str">"bash"</span>
+        <span class="kw">else</span>: lang = <span class="str">"text"</span>
+        <span class="kw">return</span> <span class="fn">f</span><span class="str">"```{lang}\n{content}\n```"</span>
+ 
+    raw_output = re.sub(r<span class="str">'```\n(.*?)```'</span>, fix_code_block, raw_output, flags=re.DOTALL)
+ 
+    <span class="kw">return</span> raw_output.strip()
+ 
+<span class="kw">def</span> <span class="fn">generate_response</span>(user_message):
+    prompt = format_prompt(user_message)
+    raw = gen(prompt, max_new_tokens=<span class="num">1024</span>, temperature=<span class="num">0.7</span>, do_sample=<span class="kw">True</span>)[<span class="num">0</span>][<span class="str">'generated_text'</span>]
+    clean = clean_output(raw)
+    safe = constitutional_generate(user_message, <span class="kw">lambda</span> x, **kw: clean)  <span class="cmt"># safety check</span>
+    <span class="kw">return</span> safe</code></pre>
+ 
+  <h2>Training data format for formatted output</h2>
+  <pre><div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="cmt"># Show the model EXACTLY what formatted output looks like</span>
+<span class="cmt"># Every training example should already be properly formatted</span>
+ 
+training_examples = [
+    {
+        <span class="str">"input"</span>: <span class="str">"How do I read a file in Python?"</span>,
+        <span class="str">"output"</span>: <span class="str">"""To read a file in Python, use the built-in `open()` function.
+ 
+## Basic reading
+ 
+```python
+with open("myfile.txt", "r") as f:
+    content = f.read()   # entire file as string
+    print(content)
+```
+ 
+## Read line by line (for large files)
+ 
+```python
+with open("myfile.txt", "r") as f:
+    for line in f:
+        print(line.strip())
+```
+ 
+The `with` block automatically closes the file when done — always use it."""</span>
+    },
+    {
+        <span class="str">"input"</span>: <span class="str">"How do I sort a list in JavaScript?"</span>,
+        <span class="str">"output"</span>: <span class="str">"""Use the built-in `.sort()` method. Note: by default it sorts as strings.
+ 
+## Alphabetical sort
+ 
+```javascript
+const fruits = ["banana", "apple", "cherry"];
+fruits.sort();
+console.log(fruits); // ["apple", "banana", "cherry"]
+```
+ 
+## Numeric sort (needs a compare function)
+ 
+```javascript
+const nums = [10, 2, 30, 1];
+nums.sort((a, b) => a - b); // ascending
+console.log(nums); // [1, 2, 10, 30]
+```
+ 
+For descending: use `(a, b) => b - a`."""</span>
+    },
+]</code></pre>
+ 
+  <div class="callout callout-blue">The key insight: your model learns to format by seeing formatted examples. The more consistently formatted your training data, the more consistently formatted your outputs will be. Quality > quantity.</div>
+ 
+  <h2>Your complete final pipeline</h2>
+  <pre><div class="code-header"><span class="code-lang">python — wire everything together</span><button class="copy-btn" onclick="copyCode(this)">copy</button></div><code><span class="kw">from</span> transformers <span class="kw">import</span> pipeline
+<span class="kw">from</span> diffusers <span class="kw">import</span> StableDiffusionPipeline
+<span class="kw">from</span> PIL <span class="kw">import</span> Image
+<span class="kw">import</span> torch
+ 
+<span class="cmt"># Load all components</span>
+text_model = pipeline(<span class="str">"text-generation"</span>, model=<span class="str">"./my-phi3-merged"</span>, device=<span class="num">0</span>)
+vision_model = pipeline(<span class="str">"image-to-text"</span>, model=<span class="str">"Salesforce/blip2-opt-2.7b"</span>, device=<span class="num">0</span>)
+image_gen = StableDiffusionPipeline.from_pretrained(<span class="str">"stabilityai/stable-diffusion-2-1"</span>, torch_dtype=torch.float16).to(<span class="str">"cuda"</span>)
+ 
+<span class="kw">def</span> <span class="fn">my_model</span>(user_message, image_path=<span class="kw">None</span>):
+    <span class="str">"""Full pipeline with constitutional safety check"""</span>
+ 
+    <span class="cmt"># Detect intent</span>
+    if image_path:
+        <span class="cmt"># Vision: describe/analyze the image</span>
+        image = Image.open(image_path)
+        description = vision_model(image, question=user_message)[<span class="num">0</span>][<span class="str">"generated_text"</span>]
+        response = generate_response(<span class="fn">f</span><span class="str">"Image shows: {description}\nUser asked: {user_message}"</span>)
+ 
+    <span class="kw">elif</span> user_message.lower().startswith((<span class="str">"generate image"</span>, <span class="str">"create image"</span>, <span class="str">"draw"</span>)):
+        <span class="cmt"># Image generation</span>
+        prompt = user_message.replace(<span class="str">"generate image of"</span>, <span class="str">""</span>).replace(<span class="str">"create image of"</span>, <span class="str">""</span>).replace(<span class="str">"draw"</span>, <span class="str">""</span>).strip()
+        safe_check = constitutional_generate(user_message, <span class="kw">lambda</span> x, **kw: <span class="str">"generating image"</span>)
+        <span class="kw">if</span> <span class="str">"can't"</span> <span class="kw">in</span> safe_check.lower():
+            response = safe_check
+        <span class="kw">else</span>:
+            img = image_gen(prompt, num_inference_steps=<span class="num">20</span>).images[<span class="num">0</span>]
+            img.save(<span class="str">"generated.png"</span>)
+            response = <span class="str">"Image generated and saved as generated.png"</span>
+ 
+    <span class="kw">else</span>:
+        <span class="cmt"># Text/code chat</span>
+        response = generate_response(user_message)
+ 
+    <span class="kw">return</span> response
+ 
+<span class="cmt"># Test it</span>
+print(my_model(<span class="str">"Write a Python class for a binary search tree"</span>))
+print(my_model(<span class="str">"What's in this image?"</span>, image_path=<span class="str">"photo.jpg"</span>))
+print(my_model(<span class="str">"Generate image of a peaceful mountain lake at sunset"</span>))</code></pre>
+</div>
+ 
+</div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /shell -->
+ 
+<script>
+function show(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  document.querySelector('.main').scrollTo(0, 0);
+}
+ 
+function copyCode(btn) {
+  const pre = btn.closest('pre');
+  const code = pre.querySelector('code');
+  const text = code.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1500);
+  });
+}
+ 
+function updateBuilder() {
+  document.querySelectorAll('.choice-row').forEach(row => {
+    const cb = row.querySelector('input[type=checkbox]');
+    row.classList.toggle('picked', cb.checked);
+  });
+}
+</script>
+</body>
+</html>
