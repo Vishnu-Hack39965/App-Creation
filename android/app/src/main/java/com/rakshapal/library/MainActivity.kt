@@ -42,7 +42,18 @@ class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleDeepLink(intent)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    override fun onResume() {
+        super.onResume()
+        // After deep link is handled, reopen website automatically
+        if (intent.data != null) {
+            intent.data = null
+            openInCustomTab(LIBRARY_URL)
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -74,9 +85,7 @@ class MainActivity : AppCompatActivity() {
         val customTabsIntent = CustomTabsIntent.Builder()
             .setShowTitle(true)
             .build()
-
         customTabsIntent.intent.setPackage("com.android.chrome")
-
         try {
             customTabsIntent.launchUrl(this, Uri.parse(url))
         } catch (e: Exception) {
@@ -88,7 +97,7 @@ class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun handleDeepLink(intent: Intent) {
         val data: Uri = intent.data ?: return
-        if (data.scheme != "mylibraryapp") return
+        if (data.scheme != "rakshapallibrary") return
 
         when (data.host) {
             "wifi" -> {
@@ -118,20 +127,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val wifiManager = applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+
         val suggestion = WifiNetworkSuggestion.Builder()
             .setSsid(ssid)
             .setWpa2Passphrase(pass)
-            .setIsAppInteractionRequired(true)
             .setPriority(999)
             .build()
 
-       val wifiManager = applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as WifiManager
-
-        wifiManager.disconnect()
-        wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-
-        val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
+        val suggestionsList = listOf(suggestion)
+        wifiManager.removeNetworkSuggestions(suggestionsList)
+        val status = wifiManager.addNetworkSuggestions(suggestionsList)
 
         if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
             Toast.makeText(
@@ -142,7 +149,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             Toast.makeText(
                 this,
-                "Could not connect. Please check Wi-Fi settings.",
+                "Could not connect. Error: $status",
                 Toast.LENGTH_LONG
             ).show()
         }
