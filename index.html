@@ -336,22 +336,37 @@ document.getElementById('u-img').src = currentUserData.photo || user.photoURL;
 
   // --- Updated Connect Logic: Fetches fresh data every time ---
   window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (!wSnap.exists()) { alert("Wi-Fi not configured yet. Contact admin."); return; }
-      const { ssid, pass } = wSnap.data();
-      if (!ssid || !pass) { alert("Wi-Fi details incomplete. Contact admin."); return; }
-      const deepLink = `mylibraryapp://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
-      window.location.href = deepLink;
-      setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          alert("Please open this in the Library App to connect to Wi-Fi.");
-        }
-      }, 1500);
-    } catch (e) {
-      alert("Error fetching Wi-Fi details. Check your connection.");
+  try {
+    const wSnap = await getDoc(doc(db, "settings", "wifi"));
+    
+    if (!wSnap.exists()) { 
+      alert("Wi-Fi configuration missing in Firestore database path: settings/wifi"); 
+      return; 
     }
-  };
+    
+    const data = wSnap.data();
+    const ssid = data.ssid;
+    const pass = data.pass;
+    
+    if (!ssid || !pass) { 
+      alert("Wi-Fi details are incomplete in the database. Ensure 'ssid' and 'pass' fields are filled."); 
+      return; 
+    }
+    
+    const deepLink = `mylibraryapp://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
+    window.location.href = deepLink;
+    
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        alert("Please open this in the Library App to connect to Wi-Fi.");
+      }
+    }, 1500);
+    
+  } catch (e) {
+    console.error("Firestore Error:", e); // Check your F12 console to see the real error logs
+    alert("Error fetching Wi-Fi details: " + e.message);
+  }
+};
 
 // Wi-Fi Admin Save (Still works for owner)
 window.saveWifiSettings = async () => {
