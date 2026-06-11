@@ -104,7 +104,6 @@ class MainActivity : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun connectToLibraryWifi(ssid: String, pass: String) {
-        // Handles edge case: user revoked permission from Settings after app opened
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(
@@ -123,11 +122,13 @@ class MainActivity : AppCompatActivity() {
             .setSsid(ssid)
             .setWpa2Passphrase(pass)
             .setIsAppInteractionRequired(true)
+            .setPriority(999)
             .build()
 
-        val wifiManager = applicationContext
+       val wifiManager = applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
 
+        wifiManager.disconnect()
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
 
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
