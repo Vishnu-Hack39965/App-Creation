@@ -1,0 +1,59 @@
+name: Generate Android App Icons
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'https://www.kindpng.com/picc/m/133-1331657_png-for-library-online-bookstore-poster-transparent-png.png'
+        required: true
+        type: string
+
+jobs:
+  resize-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
+      - name: Download source image
+        run: |
+          mkdir -p tmp
+          curl -L "${{ github.event.inputs.image_url }}" -o tmp/source.png
+
+      - name: Create mipmap folders and resize images
+        run: |
+          BASE_PATH="android/app/src/main/res"
+          
+          # Ensure folders exist
+          mkdir -p $BASE_PATH/mipmap-mdpi
+          mkdir -p $BASE_PATH/mipmap-hdpi
+          mkdir -p $BASE_PATH/mipmap-xhdpi
+          mkdir -p $BASE_PATH/mipmap-xxhdpi
+          mkdir -p $BASE_PATH/mipmap-xxxhdpi
+
+          # Resize using ImageMagick
+          convert tmp/source.png -resize 48x48     $BASE_PATH/mipmap-mdpi/ic_launcher.png
+          convert tmp/source.png -resize 72x72     $BASE_PATH/mipmap-hdpi/ic_launcher.png
+          convert tmp/source.png -resize 96x96     $BASE_PATH/mipmap-xhdpi/ic_launcher.png
+          convert tmp/source.png -resize 144x144   $BASE_PATH/mipmap-xxhdpi/ic_launcher.png
+          convert tmp/source.png -resize 192x192   $BASE_PATH/mipmap-xxxhdpi/ic_launcher.png
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          
+          git add android/app/src/main/res/mipmap-*/ic_launcher.png
+          
+          # Only commit if changes exist to avoid workflow errors
+          if ! git diff --cached --quiet; then
+            git commit -m "Automated: Updated Android app icons from URL"
+            git push
+          else
+            echo "No changes detected in icons."
+          fi
