@@ -11,6 +11,8 @@
     <application
         android:allowBackup="true"
         android:label="Rakshapal Library"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         android:usesCleartextTraffic="false">
