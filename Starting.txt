@@ -55,117 +55,39 @@ your-repo/
 
 
 
-
 ----------------------------------------------------------------------------------------------------------------------
-                                                updated logic
+                                                To change external app name
 ----------------------------------------------------------------------------------------------------------------------
+In AndroidManifest.xml:-
 
-  window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (!wSnap.exists()) { alert("Wi-Fi not configured yet. Contact admin."); return; }
-      const { ssid, pass } = wSnap.data();
-      if (!ssid || !pass) { alert("Wi-Fi details incomplete. Contact admin."); return; }
-      const deepLink = `rakshapallibrary://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
-      window.location = deepLink;
-      setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          alert("Please open this in the Library App to connect to Wi-Fi.");
-        }
-      }, 1500);
-    } catch (e) {
-      alert("Error fetching Wi-Fi details. Check your connection.");
-    }
-  };
-----------------------------------------------------------------------------------------------------------------------
-                 old connectToWifi logic
-----------------------------------------------------------------------------------------------------------------------
-         window.loadAdmin();  
- } else {document.getElementById('loginPanel').classList.remove('hidden');  
-  document.getElementById('profilePanel').classList.add('hidden');  
-  document.getElementById('tab-man').classList.add('hidden');  }
-});
+Replace "Rakshapal Library" 
+(with whatever name you want to show other users.)
 
-window.connectToWifi = async () => {
-    try {
-      const wSnap = await getDoc(doc(db, "settings", "wifi"));
-      if (wSnap.exists()) {
-        const { ssid, pass } = wSnap.data();
-        if (window.AndroidBridge) {
-          window.AndroidBridge.connectWifi(ssid, pass);
-        } else {
-          alert("Native Bridge Not Found. Run as APK.");
-        }
-      }
-    } catch (e) { alert("Error fetching wifi data"); }
-  };
-----------------------------------------------------------------------------------------------------------------------
-uid: auth.currentUser.uid,
-        name: currentUserData.name,
-        phone: currentUserData.phone,
-        timestamp: getStamp(),
-        expiresAt: Date.now() + 120000
-    });
-    window.currentLeaveOtp = otp;
-    document.getElementById('lstep1').classList.remove('step-active');
-    document.getElementById('lstep2').classList.add('step-active');
-  };
+android:label="Rakshapal Library"
 
-    // --- Updated Connect Logic: Fetches fresh data every time ---
-
+with :-
+android:label="Enter your app name here"
 
 
 
 
 
 ----------------------------------------------------------------------------------------------------------------------
-         ### updated leave logic ###
+                                                To change internal app name
 ----------------------------------------------------------------------------------------------------------------------
-  window.verifyLeave = async () => {
-    if (document.getElementById('leave-otp').value == window.currentLeaveOtp) {
-        const lastBal = window.getRealSurvival(currentUserData);
-        await updateDoc(doc(db, "users", auth.currentUser.uid), {
-          totalPaidDays: lastBal,
-          joinDateISO: null,
-          history: arrayUnion(
-            `Left Library on ${getStamp()}`,
-            `Membership Left. Last Balance: ${Math.floor(lastBal)} days`
-          )
-        });
-        // Fire forget deep link — app removes WiFi suggestion silently
-        window.location = `rakshapallibrary://forgetwifi`;
-        await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
-        setTimeout(() => location.reload(), 1000);
-    } else alert("Invalid OTP");
-  };
------------------------------------------------------------------------------------
-                old leave logic
------------------------------------------------------------------------------------
-  window.verifyLeave = async () => {
-    if (document.getElementById('leave-otp').value == window.currentLeaveOtp) {
-        const lastBal = window.getRealSurvival(currentUserData);
-        await updateDoc(doc(db, "users", auth.currentUser.uid), {
-          totalPaidDays: lastBal,
-          joinDateISO: null,
-          history: arrayUnion(
-            `Left Library on ${getStamp()}`,
-            `Membership Left. Last Balance: ${Math.floor(lastBal)} days`
-          )
-        });
-        
-        // ADDED: Forget command
-        if (window.AndroidBridge) { window.AndroidBridge.forgetWifi(); }
+Find this line in connectToWifi:
+javascriptconst deepLink = `mylibraryapp://wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
 
-        await deleteDoc(doc(db, "signals", "leave_" + auth.currentUser.uid));
-        location.reload();
-    } else alert("Invalid OTP");
-  };
+Replace with:
+javascriptconst deepLink = `rakshapallibrary://wifissid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`;
 
-    // --- Admin Logic ---
-  window.loadAdmin = () => {
-    // 1. Signals (Reverted Payment Layout)
-  
+That's the only fix needed — one word change from mylibraryapp to rakshapallibrary.
 
+Also fix your AndroidManifest.xml — update both intent filters to match:
+xml<data android:scheme="rakshapallibrary" android:host="wifi" />
+xml<data android:scheme="rakshapallibrary" android:host="forgetwifi" />
 
+And MainActivity.kt line:
+kotlinif (data.scheme != "rakshapallibrary") return
 
-
+All three files must use the same scheme — rakshapallibrary everywhere. 
