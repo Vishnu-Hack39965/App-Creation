@@ -88,7 +88,7 @@ class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun handleDeepLink(intent: Intent) {
         val data: Uri = intent.data ?: return
-        if (data.scheme != "rakshapalsinghlibrary") return
+        if (data.scheme != "mylibraryapp") return
 
         when (data.host) {
             "wifi" -> {
