@@ -1,9 +1,9 @@
-name: Build APK
+name: Build & Release APK
 
 on:
-#  push:                       #<----this is for automatic run on every commint in main branch
-#    branches: [ main ]        #     but it is commented for now for showing purpose only-------->
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -25,26 +25,40 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+
+      - name: Decode google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > android/app/google-services.json
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build Release APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease \
+            -PKEYSTORE_FILE=release.jks \
+            -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -PKEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            -PKEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: library-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: library-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Create Release with APK
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Library App v1.0.${{ github.run_number }}
-          body: Latest build of Rakshapal Singh Library App
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            Signed release of Rakshapal Singh Library App
+            Built from commit ${{ github.sha }}
+          files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
