@@ -31,14 +31,14 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="rakshapalsinghlibrary" android:host="wifi" />
+                <data android:scheme="mylibraryapp" android:host="wifi" />
             </intent-filter>
 
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="rakshapalsinghlibrary" android:host="forgetwifi" />
+                <data android:scheme="mylibraryapp" android:host="forgetwifi" />
             </intent-filter>
 
         </activity>
