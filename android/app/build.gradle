@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services'   // Firebase
 }
 
 android {
@@ -15,10 +16,29 @@ android {
         versionName "1.0"
     }
 
+    signingConfigs {
+        release {
+            // ── Same signing key for EVERY build (debug + release) ──────────────
+            // Place your release.jks at android/app/release.jks
+            // Set these 4 secrets in GitHub Actions → Settings → Secrets:
+            //   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+            // The workflow decodes KEYSTORE_BASE64 → release.jks automatically.
+            storeFile     file(project.findProperty("KEYSTORE_FILE")     ?: "release.jks")
+            storePassword project.findProperty("KEYSTORE_PASSWORD")      ?: ""
+            keyAlias      project.findProperty("KEY_ALIAS")              ?: ""
+            keyPassword   project.findProperty("KEY_PASSWORD")           ?: ""
+        }
+    }
+
     buildTypes {
+        debug {
+            // Debug also signs with the release key → SHA-256 stays constant
+            signingConfig signingConfigs.release
+        }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 
@@ -37,6 +57,20 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
-    // Custom Chrome Tab — for Google Sign-In inside app
+    // Native WebView — renders your webpage inside the app (not CCT)
+    implementation 'androidx.webkit:webkit:1.9.0'
+
+    // Custom Chrome Tab — ONLY for Google Sign-In
     implementation 'androidx.browser:browser:1.7.0'
+
+    // Firebase BOM — manages all Firebase library versions
+    implementation platform('com.google.firebase:firebase-bom:32.7.2')
+    implementation 'com.google.firebase:firebase-database-ktx'   // Realtime Database
+    implementation 'com.google.firebase:firebase-auth-ktx'       // Firebase Auth
+
+    // Google Sign-In
+    implementation 'com.google.android.gms:play-services-auth:21.0.0'
+
+    // OkHttp — for auto-update APK download
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
