@@ -14,6 +14,7 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        buildConfigField "String", "WEB_CLIENT_ID", "\"${project.findProperty('WEB_CLIENT_ID') ?: ''}\""
     }
 
     signingConfigs {
