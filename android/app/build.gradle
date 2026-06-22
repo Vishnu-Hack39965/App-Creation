@@ -1,7 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'com.google.gms.google-services'   // Firebase
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId "com.rakshapal.library"
-        minSdk 29          // Android 10 minimum — required for Network Suggestion API
+        minSdk 29
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -18,11 +18,6 @@ android {
 
     signingConfigs {
         release {
-            // ── Same signing key for EVERY build (debug + release) ──────────────
-            // Place your release.jks at android/app/release.jks
-            // Set these 4 secrets in GitHub Actions → Settings → Secrets:
-            //   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
-            // The workflow decodes KEYSTORE_BASE64 → release.jks automatically.
             storeFile     file(project.findProperty("KEYSTORE_FILE")     ?: "release.jks")
             storePassword project.findProperty("KEYSTORE_PASSWORD")      ?: ""
             keyAlias      project.findProperty("KEY_ALIAS")              ?: ""
@@ -31,10 +26,7 @@ android {
     }
 
     buildTypes {
-        debug {
-            // Debug also signs with the release key → SHA-256 stays constant
-            signingConfig signingConfigs.release
-        }
+        debug   { signingConfig signingConfigs.release }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -46,10 +38,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-
-    kotlinOptions {
-        jvmTarget = '1.8'
-    }
+    kotlinOptions { jvmTarget = '1.8' }
 }
 
 dependencies {
@@ -57,20 +46,18 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
-    // Native WebView — renders your webpage inside the app (not CCT)
+    // Native WebView
     implementation 'androidx.webkit:webkit:1.9.0'
 
-    // Custom Chrome Tab — ONLY for Google Sign-In
-    implementation 'androidx.browser:browser:1.7.0'
-
-    // Firebase BOM — manages all Firebase library versions
+    // Firebase BOM
     implementation platform('com.google.firebase:firebase-bom:32.7.2')
-    implementation 'com.google.firebase:firebase-database-ktx'   // Realtime Database
-    implementation 'com.google.firebase:firebase-auth-ktx'       // Firebase Auth
+    implementation 'com.google.firebase:firebase-database-ktx'
+    // Note: firebase-auth-ktx NOT needed on Android side —
+    // auth is handled entirely in JS via signInWithCredential
 
-    // Google Sign-In
+    // Native Google Sign-In — gives ID token to pass to JS
     implementation 'com.google.android.gms:play-services-auth:21.0.0'
 
-    // OkHttp — for auto-update APK download
+    // OkHttp for auto-update download
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
