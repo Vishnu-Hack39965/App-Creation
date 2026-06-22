@@ -41,6 +41,18 @@
                 <data android:scheme="mylibraryapp" android:host="forgetwifi" />
             </intent-filter>
 
+            <!--
+                NEW: Deep link for MediaDrm device ID extraction.
+                Website triggers: mylibraryapp://getdeviceid?callback=https://yoursite.com/verify
+                App responds by opening: https://yoursite.com/verify?drm_id=<hex_id>
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mylibraryapp" android:host="getdeviceid" />
+            </intent-filter>
+
         </activity>
     </application>
 
