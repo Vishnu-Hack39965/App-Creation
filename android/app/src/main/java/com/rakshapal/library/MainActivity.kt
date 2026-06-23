@@ -10,26 +10,37 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
+import kotlinx.coroutines.*
+import java.io.File
 import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
-    private val LIBRARY_URL = "https://rakshapal-singh-library-ded2e.web.app"
+    private val LIBRARY_URL           = "https://rakshapal-singh-library-ded2e.web.app"
     private val PERMISSION_REQUEST_CODE = 1001
+    private val WIDEVINE_UUID         = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
 
-    // Widevine UUID — the standard DRM system used to get a stable hardware device ID
-    private val WIDEVINE_UUID = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
+    // Coroutine scope tied to Activity lifetime
+    private val updateScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // ── 1. Start 15-min background checker (WorkManager) ──────────────
+        schedulePeriodicCheck(this)
+
+        // ── 2. On-open check: runs every time the app is launched ──────────
+        checkForUpdateOnOpen()
+
+        // ── 3. Normal deep-link / permission flow ──────────────────────────
         handleDeepLink(intent)
 
         if (intent.data == null) {
@@ -45,21 +56,67 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── On-open update check ───────────────────────────────────────────────
+
+    private fun checkForUpdateOnOpen() {
+        updateScope.launch {
+            // Case A: Background worker already downloaded an update → prompt immediately
+            val prefs = getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("update_ready", false)) {
+                val apkFile = File(
+                    getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                    UpdateConfig.APK_FILE_NAME
+                )
+                if (apkFile.exists()) {
+                    prefs.edit().putBoolean("update_ready", false).apply()
+                    promptInstall(this@MainActivity)
+                    return@launch
+                }
+            }
+
+            // Case B: No pre-downloaded APK → check GitHub API now
+            if (!isNetworkAvailable()) return@launch
+
+            val latestVersion = fetchLatestVersionName() ?: return@launch
+            val currentVersion = try {
+                packageManager.getPackageInfo(packageName, 0).versionName
+            } catch (e: PackageManager.NameNotFoundException) { return@launch }
+
+            if (!isNewer(latestVersion, currentVersion)) {
+                Log.d(UpdateConfig.TAG, "App is up to date ($currentVersion)")
+                return@launch
+            }
+
+            Log.d(UpdateConfig.TAG, "Update $latestVersion available — downloading…")
+            val success = downloadApkSilently(this@MainActivity)
+            if (success) {
+                promptInstall(this@MainActivity)
+            }
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
+        return cm.activeNetworkInfo?.isConnected == true
+    }
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────
+
+    override fun onDestroy() {
+        super.onDestroy()
+        updateScope.cancel()
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
     }
 
-    /**
-     * Block the back button entirely — the user should never be able to
-     * close the CCT or land on the bare app background by pressing back.
-     * On Android 13+ this is handled via OnBackPressedCallback; for older
-     * versions we override the legacy method.
-     */
     @Deprecated("Overridden to disable back navigation")
     override fun onBackPressed() {
-        // Intentionally do nothing — swallow the back press
+        // Intentionally swallow — user should not close the CCT accidentally
     }
 
     override fun onRequestPermissionsResult(
@@ -87,13 +144,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Opens the given URL in a Chrome Custom Tab.
-     * - setShareState(NO_SHARE) removes the share button so the toolbar feels
-     *   like part of the app rather than a browser.
-     * - FLAG_ACTIVITY_NO_HISTORY ensures that if the CCT is somehow dismissed,
-     *   it doesn't linger in the back stack showing the blue MainActivity behind it.
-     */
+    // ── Chrome Custom Tab ──────────────────────────────────────────────────
+
     private fun openInCustomTab(url: String) {
         val customTabsIntent = CustomTabsIntent.Builder()
             .setShowTitle(true)
@@ -114,6 +166,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── Deep link handler ──────────────────────────────────────────────────
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun handleDeepLink(intent: Intent) {
         val data: Uri = intent.data ?: return
@@ -125,11 +179,7 @@ class MainActivity : AppCompatActivity() {
                 val pass = data.getQueryParameter("pass") ?: return
                 connectToLibraryWifi(ssid, pass)
             }
-            "forgetwifi" -> {
-                forgetLibraryWifi()
-            }
-            // Website triggers: mylibraryapp://getdeviceid?callback=https://yoursite.com/verify
-            // App extracts MediaDrm ID and redirects back to the website
+            "forgetwifi" -> forgetLibraryWifi()
             "getdeviceid" -> {
                 val callbackUrl = data.getQueryParameter("callback")
                 handleGetDeviceId(callbackUrl)
@@ -137,78 +187,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Extracts the hardware MediaDrm (Widevine) Device ID and sends it back
-     * to the website via the provided callback URL.
-     *
-     * Flow:
-     *   1. Website opens: mylibraryapp://getdeviceid?callback=https://yoursite.com/verify
-     *   2. App extracts the Widevine device ID (stable, hardware-bound)
-     *   3. App opens: https://yoursite.com/verify?drm_id=<hex_id>
-     *   4. Website receives the DRM ID and checks it against the DB
-     */
+    // ── MediaDrm device ID ─────────────────────────────────────────────────
+
     private fun handleGetDeviceId(callbackUrl: String?) {
         try {
-            val mediaDrm = MediaDrm(WIDEVINE_UUID)
+            val mediaDrm    = MediaDrm(WIDEVINE_UUID)
             val deviceIdBytes = mediaDrm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID)
             mediaDrm.close()
-
-            // Convert byte array to a hex string for safe URL transport
             val deviceIdHex = deviceIdBytes.joinToString("") { "%02x".format(it) }
-
-            Log.d("MediaDrm", "Device ID extracted successfully")
+            Log.d("MediaDrm", "Device ID extracted")
 
             if (!callbackUrl.isNullOrBlank()) {
-                val returnUri = Uri.parse(callbackUrl)
-                    .buildUpon()
-                    .appendQueryParameter("drm_id", deviceIdHex)
-                    .build()
-                    .toString()
+                val returnUri = Uri.parse(callbackUrl).buildUpon()
+                    .appendQueryParameter("drm_id", deviceIdHex).build().toString()
                 openInCustomTab(returnUri)
             } else {
-                Log.w("MediaDrm", "No callback URL provided, returning to main site")
                 openInCustomTab(LIBRARY_URL)
             }
-
         } catch (e: Exception) {
-            Log.e("MediaDrm", "Failed to extract Device ID: ${e.message}")
-            Toast.makeText(
-                this,
-                "Device verification failed. Please try again.",
-                Toast.LENGTH_LONG
-            ).show()
-
+            Log.e("MediaDrm", "Failed: ${e.message}")
+            Toast.makeText(this, "Device verification failed. Please try again.",
+                Toast.LENGTH_LONG).show()
             if (!callbackUrl.isNullOrBlank()) {
-                val errorUri = Uri.parse(callbackUrl)
-                    .buildUpon()
-                    .appendQueryParameter("drm_error", "extraction_failed")
-                    .build()
-                    .toString()
+                val errorUri = Uri.parse(callbackUrl).buildUpon()
+                    .appendQueryParameter("drm_error", "extraction_failed").build().toString()
                 openInCustomTab(errorUri)
             } else {
-                // Fallback: reopen library so the blue screen is never left exposed
                 openInCustomTab(LIBRARY_URL)
             }
         }
     }
 
-    /**
-     * Connects to the library Wi-Fi, then immediately reopens the CCT
-     * so the user never sees the bare blue app background.
-     */
+    // ── Wi-Fi helpers ──────────────────────────────────────────────────────
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun connectToLibraryWifi(ssid: String, pass: String) {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(
-                this,
+            Toast.makeText(this,
                 "Location permission was revoked. Please allow it in Settings.",
-                Toast.LENGTH_LONG
-            ).show()
-            requestPermissions(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                PERMISSION_REQUEST_CODE
-            )
+                Toast.LENGTH_LONG).show()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                PERMISSION_REQUEST_CODE)
             return
         }
 
@@ -221,48 +241,28 @@ class MainActivity : AppCompatActivity() {
 
         val wifiManager = applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
-
         wifiManager.disconnect()
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
 
-        if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
-            Toast.makeText(
-                this,
-                "Connecting to Library Wi-Fi...\nYou will be connected shortly.",
-                Toast.LENGTH_LONG
-            ).show()
-        } else {
-            Toast.makeText(
-                this,
+        Toast.makeText(
+            this,
+            if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
+                "Connecting to Library Wi-Fi…\nYou will be connected shortly."
+            else
                 "Could not connect. Please check Wi-Fi settings.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-
-        // Always reopen the CCT immediately after Wi-Fi action so the
-        // user is never left staring at the bare app background.
+            Toast.LENGTH_LONG
+        ).show()
         openInCustomTab(LIBRARY_URL)
     }
 
-    /**
-     * Disconnects from library Wi-Fi, then immediately reopens the CCT
-     * so the user never sees the bare blue app background.
-     */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun forgetLibraryWifi() {
         val wifiManager = applicationContext
             .getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-        Toast.makeText(
-            this,
-            "Disconnected from Library Wi-Fi.\nMembership ended.",
-            Toast.LENGTH_LONG
-        ).show()
-
-        // Reopen the CCT immediately so the user is never left on the
-        // bare blue app background after the membership ends.
+        Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.",
+            Toast.LENGTH_LONG).show()
         openInCustomTab(LIBRARY_URL)
     }
 }
