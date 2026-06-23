@@ -1,6 +1,8 @@
 package com.rakshapal.library
 
 import android.Manifest
+import android.animation.AnimatorInflater
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,24 +12,33 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
+import android.view.View
+import android.view.animation.AnimationUtils
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.cardview.widget.CardView
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
-    private val LIBRARY_URL           = "https://rakshapal-singh-library-ded2e.web.app"
+    private val LIBRARY_URL             = "https://rakshapal-singh-library-ded2e.web.app"
     private val PERMISSION_REQUEST_CODE = 1001
-    private val WIDEVINE_UUID         = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
+    private val WIDEVINE_UUID           = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
+    private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // Coroutine scope tied to Activity lifetime
-    private val updateScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    // Floating animator reference so we can cancel on destroy
+    private var floatAnimator: ObjectAnimator? = null
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,20 +48,24 @@ class MainActivity : AppCompatActivity() {
         // ── 1. Start 15-min background checker (WorkManager) ──────────────
         schedulePeriodicCheck(this)
 
-        // ── 2. Blue-screen button wiring ───────────────────────────────────
-        findViewById<android.widget.Button>(R.id.btnHome).setOnClickListener {
-            openInCustomTab(LIBRARY_URL)
+        // ── 2. Run entrance animations ─────────────────────────────────────
+        runEntranceAnimations()
+
+        // ── 3. Button wiring ───────────────────────────────────────────────
+        findViewById<Button>(R.id.btnHome).setOnClickListener { view ->
+            animateButtonPress(view) { openInCustomTab(LIBRARY_URL) }
         }
-        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExit)
-            .setOnClickListener {
+        findViewById<Button>(R.id.btnExit).setOnClickListener { view ->
+            animateButtonPress(view) {
                 finishAffinity()
                 android.os.Process.killProcess(android.os.Process.myPid())
             }
+        }
 
-        // ── 3. On-open check: runs every time the app is launched ──────────
+        // ── 4. On-open update check ────────────────────────────────────────
         checkForUpdateOnOpen()
 
-        // ── 4. Normal deep-link / permission flow ──────────────────────────
+        // ── 5. Normal deep-link / permission flow ──────────────────────────
         handleDeepLink(intent)
 
         if (intent.data == null) {
@@ -66,15 +81,86 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── Entrance Animations ────────────────────────────────────────────────
+
+    private fun runEntranceAnimations() {
+        val card      = findViewById<CardView>(R.id.mainCard)
+        val icon      = findViewById<ImageView>(R.id.appIcon)
+        val appName   = findViewById<TextView>(R.id.appName)
+        val divider   = findViewById<View>(R.id.divider)
+        val version   = findViewById<TextView>(R.id.appVersion)
+        val btnHome   = findViewById<Button>(R.id.btnHome)
+        val btnExit   = findViewById<Button>(R.id.btnExit)
+
+        val cardAnim    = AnimationUtils.loadAnimation(this, R.anim.card_slide_up)
+        val iconAnim    = AnimationUtils.loadAnimation(this, R.anim.icon_bounce)
+        val titleAnim   = AnimationUtils.loadAnimation(this, R.anim.title_fade_in)
+        val buttonsAnim = AnimationUtils.loadAnimation(this, R.anim.buttons_fade_in)
+
+        // 1 — Card slides up
+        card.visibility = View.VISIBLE
+        card.startAnimation(cardAnim)
+
+        // 2 — Icon bounces in after 200ms
+        Handler(Looper.getMainLooper()).postDelayed({
+            icon.visibility = View.VISIBLE
+            icon.startAnimation(iconAnim)
+        }, 200)
+
+        // 3 — App name + divider + version fade in
+        Handler(Looper.getMainLooper()).postDelayed({
+            appName.visibility = View.VISIBLE
+            divider.visibility = View.VISIBLE
+            version.visibility = View.VISIBLE
+            appName.startAnimation(titleAnim)
+            divider.startAnimation(titleAnim)
+            version.startAnimation(titleAnim)
+        }, 350)
+
+        // 4 — Buttons rise in
+        Handler(Looper.getMainLooper()).postDelayed({
+            btnHome.visibility = View.VISIBLE
+            btnExit.visibility = View.VISIBLE
+            btnHome.startAnimation(buttonsAnim)
+            btnExit.startAnimation(buttonsAnim)
+        }, 700)
+
+        // 5 — Card floats gently after entrance is done (1300ms)
+        Handler(Looper.getMainLooper()).postDelayed({
+            startCardFloating(card)
+        }, 1300)
+    }
+
+    /** Gentle infinite up/down float on the card */
+    private fun startCardFloating(card: CardView) {
+        floatAnimator = AnimatorInflater
+            .loadAnimator(this, R.animator.card_float) as ObjectAnimator
+        floatAnimator?.target = card
+        floatAnimator?.start()
+    }
+
+    /** Scale-down → scale-up press effect, then runs [action] */
+    private fun animateButtonPress(view: View, action: () -> Unit) {
+        view.animate()
+            .scaleX(0.93f).scaleY(0.93f)
+            .setDuration(80)
+            .withEndAction {
+                view.animate()
+                    .scaleX(1f).scaleY(1f)
+                    .setDuration(100)
+                    .withEndAction { action() }
+                    .start()
+            }.start()
+    }
+
     // ── On-open update check ───────────────────────────────────────────────
 
     private fun checkForUpdateOnOpen() {
         updateScope.launch {
-            // Case A: Background worker already downloaded an update → prompt immediately
             val prefs = getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
             if (prefs.getBoolean("update_ready", false)) {
                 val apkFile = File(
-                    getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                    getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
                     UpdateConfig.APK_FILE_NAME
                 )
                 if (apkFile.exists()) {
@@ -86,7 +172,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Case B: No pre-downloaded APK → check GitHub API now
             if (!isNetworkAvailable()) return@launch
 
             val latestVersion = fetchLatestVersionName() ?: return@launch
@@ -102,18 +187,12 @@ class MainActivity : AppCompatActivity() {
             Log.d(UpdateConfig.TAG, "Update $latestVersion available — downloading…")
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
-                // Bring our Activity to the front (closes/hides CCT overlay)
                 bringAppToFront()
                 promptInstall(this@MainActivity, latestVersion)
             }
         }
     }
 
-    /**
-     * Brings MainActivity to the foreground so it sits on top of any
-     * Chrome Custom Tab that was open.  The CCT is a separate task, so
-     * moving our task to front effectively pushes it behind us.
-     */
     private fun bringAppToFront() {
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -132,6 +211,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        floatAnimator?.cancel()
         updateScope.cancel()
     }
 
@@ -143,7 +223,7 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Overridden to disable back navigation")
     override fun onBackPressed() {
-        // Intentionally swallow — user should not close the CCT accidentally
+        // Intentionally swallow
     }
 
     override fun onRequestPermissionsResult(
@@ -161,7 +241,7 @@ class MainActivity : AppCompatActivity() {
                     "Location permission is required to use this app.\nPlease allow it to continue.",
                     Toast.LENGTH_LONG
                 ).show()
-                android.os.Handler(mainLooper).postDelayed({
+                Handler(mainLooper).postDelayed({
                     requestPermissions(
                         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                         PERMISSION_REQUEST_CODE
@@ -218,7 +298,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleGetDeviceId(callbackUrl: String?) {
         try {
-            val mediaDrm    = MediaDrm(WIDEVINE_UUID)
+            val mediaDrm      = MediaDrm(WIDEVINE_UUID)
             val deviceIdBytes = mediaDrm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID)
             mediaDrm.close()
             val deviceIdHex = deviceIdBytes.joinToString("") { "%02x".format(it) }
