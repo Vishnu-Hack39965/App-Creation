@@ -38,6 +38,9 @@ class MainActivity : AppCompatActivity() {
     private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var floatAnimator: ObjectAnimator? = null
 
+    // Tracks the last CCT intent so we can close it
+    private var lastCctIntent: Intent? = null
+
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +86,12 @@ class MainActivity : AppCompatActivity() {
         val btnHome = findViewById<Button>(R.id.btnHome)
         val btnExit = findViewById<Button>(R.id.btnExit)
 
+        // ── Fix 2: Set version dynamically from PackageManager ──
+        val versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: PackageManager.NameNotFoundException) { "—" }
+        version.text = "Version $versionName"
+
         val cardAnim    = AnimationUtils.loadAnimation(this, R.anim.card_slide_up)
         val iconAnim    = AnimationUtils.loadAnimation(this, R.anim.icon_bounce)
         val titleAnim   = AnimationUtils.loadAnimation(this, R.anim.title_fade_in)
@@ -126,6 +135,72 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    // ── Chrome Custom Tab ──────────────────────────────────────────────────
+
+    private fun openInCustomTab(url: String) {
+        val customTabsIntent = CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
+            .build()
+        customTabsIntent.intent.apply {
+            setPackage("com.android.chrome")
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        }
+        try {
+            customTabsIntent.launchUrl(this, Uri.parse(url))
+            lastCctIntent = customTabsIntent.intent
+        } catch (e: Exception) {
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+            startActivity(browserIntent)
+        }
+    }
+
+    // ── Fix 3: Close CCT and bring our Activity to front ──────────────────
+
+    /**
+     * Closes the Chrome Custom Tab by broadcasting its close action,
+     * then moves MainActivity back to the foreground.
+     */
+    private fun closeCctAndBringToFront() {
+        // Broadcast the CCT close intent (Chrome listens for this)
+        try {
+            val closeIntent = Intent().apply {
+                action = "android.support.customtabs.action.CustomTabsService"
+                setPackage("com.android.chrome")
+            }
+            // Move our own task to front first
+            val bringFront = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(bringFront)
+        } catch (e: Exception) {
+            Log.e("CCT", "Could not close CCT: ${e.message}")
+        }
+
+        // Additionally send HOME then reopen our task — this reliably dismisses CCT
+        try {
+            val home = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(home)
+
+            // After 300ms bring our app back to front
+            Handler(Looper.getMainLooper()).postDelayed({
+                val reopen = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                    addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                if (reopen != null) startActivity(reopen)
+            }, 300)
+        } catch (e: Exception) {
+            Log.e("CCT", "Home+reopen failed: ${e.message}")
+        }
+    }
+
     // ── On-open update check ───────────────────────────────────────────────
 
     private fun checkForUpdateOnOpen() {
@@ -139,7 +214,9 @@ class MainActivity : AppCompatActivity() {
                 if (apkFile.exists()) {
                     val savedVersion = prefs.getString("update_version", "") ?: ""
                     prefs.edit().putBoolean("update_ready", false).apply()
-                    bringAppToFront()
+                    closeCctAndBringToFront()
+                    // Wait for activity to come to front before showing dialog
+                    delay(600)
                     promptInstall(this@MainActivity, savedVersion)
                     return@launch
                 }
@@ -160,18 +237,12 @@ class MainActivity : AppCompatActivity() {
             Log.d(UpdateConfig.TAG, "Update $latestVersion available — downloading…")
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
-                bringAppToFront()
+                closeCctAndBringToFront()
+                // Wait for activity to come to front before showing dialog
+                delay(600)
                 promptInstall(this@MainActivity, latestVersion)
             }
         }
-    }
-
-    private fun bringAppToFront() {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        startActivity(intent)
     }
 
     private fun isNetworkAvailable(): Boolean {
@@ -215,26 +286,6 @@ class MainActivity : AppCompatActivity() {
                         PERMISSION_REQUEST_CODE)
                 }, 3000)
             }
-        }
-    }
-
-    // ── Chrome Custom Tab ──────────────────────────────────────────────────
-
-    private fun openInCustomTab(url: String) {
-        val customTabsIntent = CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
-            .build()
-        customTabsIntent.intent.apply {
-            setPackage("com.android.chrome")
-            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-        }
-        try {
-            customTabsIntent.launchUrl(this, Uri.parse(url))
-        } catch (e: Exception) {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-            startActivity(browserIntent)
         }
     }
 
