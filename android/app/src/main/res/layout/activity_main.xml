@@ -3,6 +3,76 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1976d2">
+    android:background="#1976D2">
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card"
+        android:layout_width="280dp"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="#FFFFFF"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="28dp"
+            android:gravity="center">
+
+            <!-- App icon placeholder -->
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@mipmap/ic_launcher"
+                android:layout_marginBottom="12dp" />
+
+            <!-- App name -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Rakshapal Library"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#1976D2"
+                android:gravity="center" />
+
+            <!-- Version -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0.39"
+                android:textSize="13sp"
+                android:textColor="#888888"
+                android:layout_marginBottom="28dp"
+                android:gravity="center" />
+
+            <!-- Go to Home Page button (filled blue) -->
+            <Button
+                android:id="@+id/btnHome"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="🏠  Go to Home Page"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#1976D2"
+                android:textSize="14sp"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Exit App button (outlined) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExit"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="✕  Exit App"
+                android:textColor="#1976D2"
+                android:textSize="14sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="#1976D2"
+                app:strokeWidth="2dp" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
 </RelativeLayout>
