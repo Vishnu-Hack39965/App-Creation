@@ -37,10 +37,20 @@ class MainActivity : AppCompatActivity() {
         // ── 1. Start 15-min background checker (WorkManager) ──────────────
         schedulePeriodicCheck(this)
 
-        // ── 2. On-open check: runs every time the app is launched ──────────
+        // ── 2. Blue-screen button wiring ───────────────────────────────────
+        findViewById<android.widget.Button>(R.id.btnHome).setOnClickListener {
+            openInCustomTab(LIBRARY_URL)
+        }
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExit)
+            .setOnClickListener {
+                finishAffinity()
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+
+        // ── 3. On-open check: runs every time the app is launched ──────────
         checkForUpdateOnOpen()
 
-        // ── 3. Normal deep-link / permission flow ──────────────────────────
+        // ── 4. Normal deep-link / permission flow ──────────────────────────
         handleDeepLink(intent)
 
         if (intent.data == null) {
@@ -68,8 +78,10 @@ class MainActivity : AppCompatActivity() {
                     UpdateConfig.APK_FILE_NAME
                 )
                 if (apkFile.exists()) {
+                    val savedVersion = prefs.getString("update_version", "") ?: ""
                     prefs.edit().putBoolean("update_ready", false).apply()
-                    promptInstall(this@MainActivity)
+                    bringAppToFront()
+                    promptInstall(this@MainActivity, savedVersion)
                     return@launch
                 }
             }
@@ -90,9 +102,24 @@ class MainActivity : AppCompatActivity() {
             Log.d(UpdateConfig.TAG, "Update $latestVersion available — downloading…")
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
-                promptInstall(this@MainActivity)
+                // Bring our Activity to the front (closes/hides CCT overlay)
+                bringAppToFront()
+                promptInstall(this@MainActivity, latestVersion)
             }
         }
+    }
+
+    /**
+     * Brings MainActivity to the foreground so it sits on top of any
+     * Chrome Custom Tab that was open.  The CCT is a separate task, so
+     * moving our task to front effectively pushes it behind us.
+     */
+    private fun bringAppToFront() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
     }
 
     private fun isNetworkAvailable(): Boolean {

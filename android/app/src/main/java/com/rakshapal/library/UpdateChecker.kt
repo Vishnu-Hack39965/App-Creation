@@ -135,23 +135,38 @@ suspend fun downloadApkSilently(context: Context): Boolean = withContext(Dispatc
     }
 }
 
-/** Shows the install prompt to the user — call only from the UI thread */
-fun promptInstall(context: Context) {
+/**
+ * Shows a FORCE-INSTALL dialog — no cancel button, no back press, no outside dismiss.
+ * The only exit is tapping Install, which opens the system installer.
+ * [versionName] is the new version string shown in the dialog (e.g. "1.0.43").
+ * Call only from the UI thread.
+ */
+fun promptInstall(context: Context, versionName: String = "") {
     val apkFile = File(
         context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
         UpdateConfig.APK_FILE_NAME
     )
     if (!apkFile.exists()) return
 
-    AlertDialog.Builder(context)
-        .setTitle("Update Ready")
-        .setMessage("A new version of Rakshapal Library is ready to install.")
-        .setPositiveButton("Install Now") { _, _ ->
+    val displayVersion = if (versionName.isNotBlank()) versionName else "a new version"
+    val message = "Rakshapal Library $displayVersion is available.\n\nPlease install it to continue using the app."
+
+    val dialog = AlertDialog.Builder(context)
+        .setTitle("Update Required")
+        .setMessage(message)
+        .setPositiveButton("Install") { _, _ ->
             installApk(context, apkFile)
         }
-        .setNegativeButton("Later", null)
-        .setCancelable(false)
-        .show()
+        // No negative button — no "Cancel" or "Later"
+        .setCancelable(false)   // blocks back press + outside tap
+        .create()
+
+    // Extra safety: also swallow the back key inside the dialog
+    dialog.setOnKeyListener { _, keyCode, _ ->
+        keyCode == android.view.KeyEvent.KEYCODE_BACK   // true = consumed, do nothing
+    }
+
+    dialog.show()
 }
 
 /** Triggers the system APK installer */
