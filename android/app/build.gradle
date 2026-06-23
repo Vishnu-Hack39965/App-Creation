@@ -9,16 +9,34 @@ android {
 
     defaultConfig {
         applicationId "com.rakshapal.library"
-        minSdk 29          // Android 10 minimum — required for Network Suggestion API
+        minSdk 29
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+
+        // versionCode is injected by CI (github.run_number); fallback to 1 locally
+        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInteger()
+        versionName = "1.0." + (System.getenv("VERSION_CODE") ?: "0")
+    }
+
+    signingConfigs {
+        release {
+            // Secrets injected by GitHub Actions workflow — never hard-coded here
+            storeFile     file(System.getenv("KEYSTORE_PATH") ?: "debug.keystore")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias      System.getenv("KEY_ALIAS")         ?: ""
+            keyPassword   System.getenv("KEY_PASSWORD")      ?: ""
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                          'proguard-rules.pro'
+        }
+        debug {
+            // Debug builds also signed with release key in CI so version upgrades work
+            signingConfig signingConfigs.release
         }
     }
 
@@ -36,7 +54,11 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-
-    // Custom Chrome Tab — for Google Sign-In inside app
     implementation 'androidx.browser:browser:1.7.0'
+
+    // WorkManager — for 15-minute background update checks
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+
+    // Coroutines — used in update checker
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 }
