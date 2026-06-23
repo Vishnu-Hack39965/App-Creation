@@ -12,10 +12,10 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.KeyEvent
 import android.view.View
 import android.view.animation.AnimationUtils
 import android.widget.Button
@@ -36,8 +36,6 @@ class MainActivity : AppCompatActivity() {
     private val PERMISSION_REQUEST_CODE = 1001
     private val WIDEVINE_UUID           = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
     private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
-
-    // Floating animator reference so we can cancel on destroy
     private var floatAnimator: ObjectAnimator? = null
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -45,13 +43,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // ── 1. Start 15-min background checker (WorkManager) ──────────────
         schedulePeriodicCheck(this)
-
-        // ── 2. Run entrance animations ─────────────────────────────────────
         runEntranceAnimations()
 
-        // ── 3. Button wiring ───────────────────────────────────────────────
         findViewById<Button>(R.id.btnHome).setOnClickListener { view ->
             animateButtonPress(view) { openInCustomTab(LIBRARY_URL) }
         }
@@ -62,10 +56,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ── 4. On-open update check ────────────────────────────────────────
         checkForUpdateOnOpen()
-
-        // ── 5. Normal deep-link / permission flow ──────────────────────────
         handleDeepLink(intent)
 
         if (intent.data == null) {
@@ -84,30 +75,27 @@ class MainActivity : AppCompatActivity() {
     // ── Entrance Animations ────────────────────────────────────────────────
 
     private fun runEntranceAnimations() {
-        val card      = findViewById<CardView>(R.id.mainCard)
-        val icon      = findViewById<ImageView>(R.id.appIcon)
-        val appName   = findViewById<TextView>(R.id.appName)
-        val divider   = findViewById<View>(R.id.divider)
-        val version   = findViewById<TextView>(R.id.appVersion)
-        val btnHome   = findViewById<Button>(R.id.btnHome)
-        val btnExit   = findViewById<Button>(R.id.btnExit)
+        val card    = findViewById<CardView>(R.id.mainCard)
+        val icon    = findViewById<ImageView>(R.id.appIcon)
+        val appName = findViewById<TextView>(R.id.appName)
+        val divider = findViewById<View>(R.id.divider)
+        val version = findViewById<TextView>(R.id.appVersion)
+        val btnHome = findViewById<Button>(R.id.btnHome)
+        val btnExit = findViewById<Button>(R.id.btnExit)
 
         val cardAnim    = AnimationUtils.loadAnimation(this, R.anim.card_slide_up)
         val iconAnim    = AnimationUtils.loadAnimation(this, R.anim.icon_bounce)
         val titleAnim   = AnimationUtils.loadAnimation(this, R.anim.title_fade_in)
         val buttonsAnim = AnimationUtils.loadAnimation(this, R.anim.buttons_fade_in)
 
-        // 1 — Card slides up
         card.visibility = View.VISIBLE
         card.startAnimation(cardAnim)
 
-        // 2 — Icon bounces in after 200ms
         Handler(Looper.getMainLooper()).postDelayed({
             icon.visibility = View.VISIBLE
             icon.startAnimation(iconAnim)
         }, 200)
 
-        // 3 — App name + divider + version fade in
         Handler(Looper.getMainLooper()).postDelayed({
             appName.visibility = View.VISIBLE
             divider.visibility = View.VISIBLE
@@ -117,7 +105,6 @@ class MainActivity : AppCompatActivity() {
             version.startAnimation(titleAnim)
         }, 350)
 
-        // 4 — Buttons rise in
         Handler(Looper.getMainLooper()).postDelayed({
             btnHome.visibility = View.VISIBLE
             btnExit.visibility = View.VISIBLE
@@ -125,32 +112,18 @@ class MainActivity : AppCompatActivity() {
             btnExit.startAnimation(buttonsAnim)
         }, 700)
 
-        // 5 — Card floats gently after entrance is done (1300ms)
         Handler(Looper.getMainLooper()).postDelayed({
-            startCardFloating(card)
+            floatAnimator = AnimatorInflater
+                .loadAnimator(this, R.animator.card_float) as ObjectAnimator
+            floatAnimator?.target = card
+            floatAnimator?.start()
         }, 1300)
     }
 
-    /** Gentle infinite up/down float on the card */
-    private fun startCardFloating(card: CardView) {
-        floatAnimator = AnimatorInflater
-            .loadAnimator(this, R.animator.card_float) as ObjectAnimator
-        floatAnimator?.target = card
-        floatAnimator?.start()
-    }
-
-    /** Scale-down → scale-up press effect, then runs [action] */
     private fun animateButtonPress(view: View, action: () -> Unit) {
-        view.animate()
-            .scaleX(0.93f).scaleY(0.93f)
-            .setDuration(80)
-            .withEndAction {
-                view.animate()
-                    .scaleX(1f).scaleY(1f)
-                    .setDuration(100)
-                    .withEndAction { action() }
-                    .start()
-            }.start()
+        view.animate().scaleX(0.93f).scaleY(0.93f).setDuration(80).withEndAction {
+            view.animate().scaleX(1f).scaleY(1f).setDuration(100).withEndAction { action() }.start()
+        }.start()
     }
 
     // ── On-open update check ───────────────────────────────────────────────
@@ -160,7 +133,7 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
             if (prefs.getBoolean("update_ready", false)) {
                 val apkFile = File(
-                    getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
                     UpdateConfig.APK_FILE_NAME
                 )
                 if (apkFile.exists()) {
@@ -222,9 +195,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Overridden to disable back navigation")
-    override fun onBackPressed() {
-        // Intentionally swallow
-    }
+    override fun onBackPressed() { }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -236,16 +207,12 @@ class MainActivity : AppCompatActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 openInCustomTab(LIBRARY_URL)
             } else {
-                Toast.makeText(
-                    this,
+                Toast.makeText(this,
                     "Location permission is required to use this app.\nPlease allow it to continue.",
-                    Toast.LENGTH_LONG
-                ).show()
+                    Toast.LENGTH_LONG).show()
                 Handler(mainLooper).postDelayed({
-                    requestPermissions(
-                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                        PERMISSION_REQUEST_CODE
-                    )
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                        PERMISSION_REQUEST_CODE)
                 }, 3000)
             }
         }
@@ -258,12 +225,10 @@ class MainActivity : AppCompatActivity() {
             .setShowTitle(true)
             .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
             .build()
-
         customTabsIntent.intent.apply {
             setPackage("com.android.chrome")
             addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
         }
-
         try {
             customTabsIntent.launchUrl(this, Uri.parse(url))
         } catch (e: Exception) {
@@ -279,7 +244,6 @@ class MainActivity : AppCompatActivity() {
     private fun handleDeepLink(intent: Intent) {
         val data: Uri = intent.data ?: return
         if (data.scheme != "mylibraryapp") return
-
         when (data.host) {
             "wifi" -> {
                 val ssid = data.getQueryParameter("ssid") ?: return
@@ -287,10 +251,7 @@ class MainActivity : AppCompatActivity() {
                 connectToLibraryWifi(ssid, pass)
             }
             "forgetwifi" -> forgetLibraryWifi()
-            "getdeviceid" -> {
-                val callbackUrl = data.getQueryParameter("callback")
-                handleGetDeviceId(callbackUrl)
-            }
+            "getdeviceid" -> handleGetDeviceId(data.getQueryParameter("callback"))
         }
     }
 
@@ -302,15 +263,11 @@ class MainActivity : AppCompatActivity() {
             val deviceIdBytes = mediaDrm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID)
             mediaDrm.close()
             val deviceIdHex = deviceIdBytes.joinToString("") { "%02x".format(it) }
-            Log.d("MediaDrm", "Device ID extracted")
-
             if (!callbackUrl.isNullOrBlank()) {
                 val returnUri = Uri.parse(callbackUrl).buildUpon()
                     .appendQueryParameter("drm_id", deviceIdHex).build().toString()
                 openInCustomTab(returnUri)
-            } else {
-                openInCustomTab(LIBRARY_URL)
-            }
+            } else { openInCustomTab(LIBRARY_URL) }
         } catch (e: Exception) {
             Log.e("MediaDrm", "Failed: ${e.message}")
             Toast.makeText(this, "Device verification failed. Please try again.",
@@ -319,9 +276,7 @@ class MainActivity : AppCompatActivity() {
                 val errorUri = Uri.parse(callbackUrl).buildUpon()
                     .appendQueryParameter("drm_error", "extraction_failed").build().toString()
                 openInCustomTab(errorUri)
-            } else {
-                openInCustomTab(LIBRARY_URL)
-            }
+            } else { openInCustomTab(LIBRARY_URL) }
         }
     }
 
@@ -331,42 +286,30 @@ class MainActivity : AppCompatActivity() {
     private fun connectToLibraryWifi(ssid: String, pass: String) {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this,
-                "Location permission was revoked. Please allow it in Settings.",
+            Toast.makeText(this, "Location permission was revoked. Please allow it in Settings.",
                 Toast.LENGTH_LONG).show()
             requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                 PERMISSION_REQUEST_CODE)
             return
         }
-
         val suggestion = WifiNetworkSuggestion.Builder()
-            .setSsid(ssid)
-            .setWpa2Passphrase(pass)
-            .setIsAppInteractionRequired(true)
-            .setPriority(999)
-            .build()
-
-        val wifiManager = applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as WifiManager
+            .setSsid(ssid).setWpa2Passphrase(pass)
+            .setIsAppInteractionRequired(true).setPriority(999).build()
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiManager.disconnect()
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
-
-        Toast.makeText(
-            this,
+        Toast.makeText(this,
             if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
                 "Connecting to Library Wi-Fi…\nYou will be connected shortly."
-            else
-                "Could not connect. Please check Wi-Fi settings.",
-            Toast.LENGTH_LONG
-        ).show()
+            else "Could not connect. Please check Wi-Fi settings.",
+            Toast.LENGTH_LONG).show()
         openInCustomTab(LIBRARY_URL)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun forgetLibraryWifi() {
-        val wifiManager = applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
         Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.",
             Toast.LENGTH_LONG).show()
