@@ -64,9 +64,44 @@
                 android:textSize="12sp"
                 android:textColor="#999999"
                 android:letterSpacing="0.08"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="18dp"
                 android:gravity="center"
                 android:visibility="invisible" />
+
+            <!-- ── Survival Timer (shown when Wi-Fi suggestion is active) ── -->
+            <LinearLayout
+                android:id="@+id/survivalTimerBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="#F0F7FF"
+                android:padding="10dp"
+                android:layout_marginBottom="14dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⏱ Wi-Fi Access Remaining"
+                    android:textSize="10sp"
+                    android:textColor="#1976D2"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/tvSurvivalTimer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00:00"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="#1976D2"
+                    android:letterSpacing="0.05" />
+
+            </LinearLayout>
 
             <!-- Go to Home Page — taller, multiline allowed -->
             <Button
