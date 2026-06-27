@@ -344,18 +344,37 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val suggestion = WifiNetworkSuggestion.Builder()
-            .setSsid(ssid).setWpa2Passphrase(pass)
-            .setIsAppInteractionRequired(true).setPriority(999).build()
+            .setSsid(ssid)
+            .setWpa2Passphrase(pass)
+            .setIsAppInteractionRequired(true)
+            .setPriority(999)
+            .build()
+
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
         wifiManager.disconnect()
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
+
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
-        Toast.makeText(this,
-            if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
-                "Connecting to Library Wi-Fi…\nYou will be connected shortly."
-            else "Could not connect. Please check Wi-Fi settings.",
-            Toast.LENGTH_LONG).show()
-        openInCustomTab(LIBRARY_URL)
+
+        if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
+            Toast.makeText(
+                this,
+                "Connecting to Library Wi-Fi…\nYou will be connected shortly.",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            Toast.makeText(
+                this,
+                "Could not connect. Please check Wi-Fi settings.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        // NOTE: openInCustomTab intentionally removed here.
+        // Launching a new Activity immediately after addNetworkSuggestions
+        // pushes MainActivity to the background before Android can show the
+        // "Allow suggested Wi-Fi?" consent dialog, causing the popup to never
+        // appear and the suggestion to be silently ignored.
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -364,6 +383,6 @@ class MainActivity : AppCompatActivity() {
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
         Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.",
             Toast.LENGTH_LONG).show()
-        openInCustomTab(LIBRARY_URL)
+        // openInCustomTab intentionally not called here — let the caller's page handle navigation.
     }
 }
