@@ -6,7 +6,7 @@ on:
 jobs:
   screenshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -21,16 +21,15 @@ jobs:
             "https://github.com/Vishnu-Hack39965/App-Creation/releases/latest/download/app-debug.apk" \
             -o app-debug.apk
           echo "APK size: $(du -sh app-debug.apk)"
+          # Fail early if APK download failed or is too small
+          [ $(stat -c%s app-debug.apk) -gt 10000 ] || (echo "APK download failed or too small!" && exit 1)
 
-      # ── Set up Java & Android SDK ────────────────────────────────────────
+      # ── Set up Java 17 ───────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
 
       # ── Enable KVM for emulator acceleration ─────────────────────────────
       - name: Enable KVM
@@ -41,49 +40,91 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls /dev/kvm
 
-      # ── Install emulator & system image ──────────────────────────────────
-      - name: Install emulator system image
+      # ── Install Android SDK + emulator + system image ────────────────────
+      # FIX: Combined into ONE step so AVD is created before emulator starts
+      - name: Set up Android SDK and create AVD
         run: |
+          # Accept all licenses non-interactively
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+          # Install required packages
           sdkmanager --install \
             "system-images;android-31;google_apis;x86_64" \
             "emulator" \
             "platform-tools" \
             "platforms;android-31"
+
+          # Create AVD — FIX: pipe 'no' to avoid hardware profile prompt
           echo "no" | avdmanager create avd \
             -n TestAVD \
             -k "system-images;android-31;google_apis;x86_64" \
+            --device "pixel_4" \
             --force
 
+          # Verify AVD was actually created — FIX: fail here if missing
+          avdmanager list avd | grep "TestAVD" || (echo "AVD creation FAILED!" && exit 1)
+          echo "AVD created successfully."
+
       # ── Start emulator ────────────────────────────────────────────────────
+      # FIX: Proper boot wait with timeout so it never hangs forever
       - name: Start Android emulator
+        timeout-minutes: 10
         run: |
+          # Start emulator in background
           $ANDROID_HOME/emulator/emulator \
             -avd TestAVD \
             -no-snapshot \
             -no-audio \
             -no-window \
+            -no-boot-anim \
             -gpu swiftshader_indirect \
-            -accel on &
-          adb wait-for-device
-          # Wait until boot is complete
+            -accel on \
+            -memory 2048 \
+            -cores 2 \
+            2>&1 &
+
+          echo "Emulator process started. Waiting for device..."
+
+          # FIX: wait-for-device with explicit timeout (120s)
+          adb wait-for-device -t 120 || (echo "Device never appeared!" && exit 1)
+
+          echo "Device connected. Waiting for full boot..."
+
+          # FIX: Boot wait loop with a hard timeout counter (max 180 tries × 5s = 15 min cap)
+          BOOT_TIMEOUT=60
+          COUNT=0
           until adb shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; do
-            echo "Waiting for emulator boot…"
+            echo "  [${COUNT}/${BOOT_TIMEOUT}] Still booting..."
             sleep 5
+            COUNT=$((COUNT+1))
+            if [ $COUNT -ge $BOOT_TIMEOUT ]; then
+              echo "Boot timed out after $((BOOT_TIMEOUT * 5))s!"
+              exit 1
+            fi
           done
-          sleep 5
-          echo "Emulator ready."
+
+          # Extra settle time after boot
+          sleep 8
+
+          # Unlock screen
+          adb shell input keyevent 82 || true
+          sleep 2
+
+          echo "Emulator fully booted and ready."
 
       # ── Install the APK ───────────────────────────────────────────────────
       - name: Install APK
         run: |
           adb install -r app-debug.apk
-          echo "APK installed."
+          echo "APK installed successfully."
 
       # ── Start screen recording in background ──────────────────────────────
       - name: Start screen recording
         run: |
-          adb shell screenrecord /sdcard/demo.mp4 &
+          # screenrecord max duration 180s (3 min) — adjust if needed
+          adb shell "screenrecord --time-limit 180 /sdcard/demo.mp4" &
           echo $! > screenrecord.pid
+          sleep 2
           echo "Screen recording started."
 
       # ── Run workflow & capture screenshots ───────────────────────────────
@@ -92,90 +133,130 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p screenshots
-          DELAY=3
+          DELAY=4
           PKG="com.rakshapal.library"
           MAIN_ACT="$PKG/.MainActivity"
           DASH_ACT="$PKG/.OfflineDashboardActivity"
 
-          # Grant location permission
-          adb shell pm grant $PKG android.permission.ACCESS_FINE_LOCATION || true
+          # Grant location permission upfront so app doesn't block on dialog
+          adb shell pm grant $PKG android.permission.ACCESS_FINE_LOCATION 2>/dev/null || true
+          adb shell pm grant $PKG android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
 
           # ── Photo 1: Main screen ─────────────────────────────────────────
+          echo "--- Step 1: Main Screen ---"
           adb shell am start -n "$MAIN_ACT"
           sleep $DELAY
           adb exec-out screencap -p > screenshots/01_main_screen.png
           echo "Screenshot 1 captured: Main Screen"
 
-          # ── Photo 2: First time open Offline Dashboard (no data) ─────────
+          # ── Photo 2: Offline Dashboard (no data — first time) ───────────
+          echo "--- Step 2: Dashboard No Data ---"
           adb shell am start -n "$DASH_ACT"
           sleep $DELAY
           adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
           echo "Screenshot 2 captured: Dashboard (no data)"
 
-          # ── Inject sample data via adb shell (simulate deep link) ─────────
-          # We push a small helper script to inject files directly
-          adb shell "mkdir -p /data/data/$PKG/files/"
-          # user_data.txt
-          adb shell "echo 'name=Ramesh Kumar' > /data/data/$PKG/files/user_data.txt && \
-            echo 'father=Suresh Kumar' >> /data/data/$PKG/files/user_data.txt && \
-            echo 'phone=9876543210' >> /data/data/$PKG/files/user_data.txt && \
-            echo 'address=12 Gandhi Nagar Agra' >> /data/data/$PKG/files/user_data.txt" || true
+          # ── Inject sample data directly into app's private files ─────────
+          # FIX: Use 'run-as' which works on debug APKs without root
+          echo "--- Injecting sample data ---"
 
-          # wifi_data.txt (base64 encoded values)
-          SSID_B64=$(echo -n "Library_WiFi_5G" | base64 -w0)
-          PASS_B64=$(echo -n "library@2024" | base64 -w0)
+          # user_data.txt (plain text)
+          adb shell "run-as $PKG sh -c \
+            'echo \"name=Ramesh Kumar\" > /data/data/$PKG/files/user_data.txt && \
+             echo \"father=Suresh Kumar\" >> /data/data/$PKG/files/user_data.txt && \
+             echo \"phone=9876543210\" >> /data/data/$PKG/files/user_data.txt && \
+             echo \"address=12 Gandhi Nagar Agra UP 282001\" >> /data/data/$PKG/files/user_data.txt'" \
+            || echo "user_data inject failed (will use sample button instead)"
+
+          # wifi_data.txt (Base64 encoded values — matching app's encode format)
+          SSID_B64=$(echo -n "Library_WiFi_5G"  | base64 -w0)
+          PASS_B64=$(echo -n "library@2024"      | base64 -w0)
           SSID2_B64=$(echo -n "Library_WiFi_2G" | base64 -w0)
-          PASS2_B64=$(echo -n "library@2024" | base64 -w0)
-          adb shell "echo 'ssid=$SSID_B64' > /data/data/$PKG/files/wifi_data.txt && \
-            echo 'pass=$PASS_B64' >> /data/data/$PKG/files/wifi_data.txt && \
-            echo 'ssid2=$SSID2_B64' >> /data/data/$PKG/files/wifi_data.txt && \
-            echo 'pass2=$PASS2_B64' >> /data/data/$PKG/files/wifi_data.txt" || true
+          PASS2_B64=$(echo -n "library@2024"     | base64 -w0)
 
-          # survival.txt: "5.75|<epoch>" encoded
-          EPOCH=$(date +%s%3N)
-          RAW="5.75|$EPOCH"
+          adb shell "run-as $PKG sh -c \
+            'echo \"ssid=$SSID_B64\" > /data/data/$PKG/files/wifi_data.txt && \
+             echo \"pass=$PASS_B64\" >> /data/data/$PKG/files/wifi_data.txt && \
+             echo \"ssid2=$SSID2_B64\" >> /data/data/$PKG/files/wifi_data.txt && \
+             echo \"pass2=$PASS2_B64\" >> /data/data/$PKG/files/wifi_data.txt'" \
+            || echo "wifi_data inject failed"
+
+          # survival.txt: Base64( "5.75|<epochMillis>" )
+          EPOCH_MS=$(date +%s%3N)
+          RAW="5.75|${EPOCH_MS}"
           SURVIVAL_B64=$(echo -n "$RAW" | base64 -w0)
-          adb shell "echo '$SURVIVAL_B64' > /data/data/$PKG/files/survival.txt" || true
 
-          echo "Sample data files injected."
+          adb shell "run-as $PKG sh -c \
+            'echo \"$SURVIVAL_B64\" > /data/data/$PKG/files/survival.txt'" \
+            || echo "survival inject failed"
 
-          # ── Photo 3: Dashboard with sample data (preview button tapped) ───
-          # Restart dashboard to pick up data
+          echo "Sample data injection attempted."
+
+          # ── Photo 3: Dashboard with injected data ────────────────────────
+          echo "--- Step 3: Dashboard With Data ---"
           adb shell am start -n "$DASH_ACT"
           sleep $DELAY
           adb exec-out screencap -p > screenshots/03_dashboard_with_data.png
-          echo "Screenshot 3 captured: Dashboard with sample data"
+          echo "Screenshot 3 captured: Dashboard with injected data"
 
-          # Tap the Load Sample Data button (via UI Automator)
-          adb shell input tap 540 1700 || true
+          # ── Tap 'Load Sample Data' button as backup ───────────────────────
+          # Button is near bottom of screen — using approximate centre coords
+          # (540 = centre X on 1080px screen; 1750 = approximate Y for last button)
+          adb shell input tap 540 1750 || true
+          sleep 3
+          adb exec-out screencap -p > screenshots/03b_after_sample_button.png
+          echo "Screenshot 3b captured: After sample data button tap"
+
+          # ── Scroll down to see WiFi buttons ──────────────────────────────
+          adb shell input swipe 540 1200 540 400 500 || true
           sleep 2
-          adb exec-out screencap -p > screenshots/03b_dashboard_after_sample_tap.png
-          echo "Screenshot 3b captured: Dashboard after sample tap"
+          adb exec-out screencap -p > screenshots/03c_dashboard_scrolled.png
+          echo "Screenshot 3c captured: Dashboard scrolled (WiFi buttons visible)"
 
-          # ── Photo 4: Go back to Main screen ──────────────────────────────
+          # ── Tap Connect to WiFi 1 button ──────────────────────────────────
+          adb shell input tap 540 900 || true
+          sleep 3
+          adb exec-out screencap -p > screenshots/03d_after_wifi_connect.png
+          echo "Screenshot 3d captured: After WiFi connect tap"
+
+          # ── Back to Dashboard top ─────────────────────────────────────────
+          adb shell input swipe 540 400 540 1200 500 || true
+          sleep 1
+
+          # ── Photo 4: Press Back → Main screen ────────────────────────────
+          echo "--- Step 4: Back to Main Screen ---"
           adb shell input keyevent KEYCODE_BACK || true
           sleep 2
-          adb shell am start -n "$MAIN_ACT"
-          sleep $DELAY
           adb exec-out screencap -p > screenshots/04_main_after_dashboard.png
-          echo "Screenshot 4 captured: Main screen after Dashboard"
+          echo "Screenshot 4 captured: Main screen after closing Dashboard"
 
-          echo "All screenshots captured successfully."
+          # ── Photo 5: Tap Go to Home Page (CCT) ───────────────────────────
+          echo "--- Step 5: Home Page (CCT) ---"
+          # Tap the Home button (2nd button in card — approx Y 1300 on Pixel 4)
+          adb shell input tap 540 1300 || true
+          sleep 5
+          adb exec-out screencap -p > screenshots/05_home_page_cct.png
+          echo "Screenshot 5 captured: Home Page (Chrome Custom Tab)"
 
-      # ── Stop screen recording ─────────────────────────────────────────────
+          echo "All screenshots captured."
+
+      # ── Stop screen recording & pull video ───────────────────────────────
       - name: Stop screen recording and pull video
         if: always()
         run: |
-          # Stop screenrecord
+          # Kill our local background pid
           if [ -f screenrecord.pid ]; then
             kill $(cat screenrecord.pid) 2>/dev/null || true
           fi
-          adb shell pkill -l SIGINT screenrecord 2>/dev/null || true
-          sleep 3
-          adb pull /sdcard/demo.mp4 screenshots/demo.mp4 || echo "Video pull failed — partial file may exist"
-          echo "Video pulled."
+          # Send SIGINT to screenrecord on device so it finalises the MP4
+          adb shell pkill -2 screenrecord 2>/dev/null || true
+          sleep 4
+          # Pull the video
+          adb pull /sdcard/demo.mp4 screenshots/demo.mp4 \
+            || echo "Video pull failed — partial or no file"
+          echo "Video step done."
 
-      # ── Upload all artifacts (always — even on failure) ──────────────────
+      # ── Upload everything — always, even on failure ───────────────────────
       - name: Upload screenshots and video
         if: always()
         uses: actions/upload-artifact@v4
