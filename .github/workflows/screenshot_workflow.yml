@@ -2,7 +2,7 @@ name: App Screenshot & Video Workflow
 
 on:
   push:
-  branch: [ The-working-app ]
+    branch: [ The-working-app ]
   workflow_dispatch:
 
 permissions:
