@@ -27,16 +27,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Download latest release APK
-        run: |
-          # Use the direct release URL you confirmed works
-          curl -L \
-            "https://github.com/Vishnu-Hack39965/App-Creation/releases/latest/download/app-debug.apk" \
-            -o app-debug.apk
-          echo "APK size: $(du -sh app-debug.apk)"
-          [ $(stat -c%s app-debug.apk) -gt 100000 ] \
-            || (echo "APK too small — download likely failed!" && exit 1)
-
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
@@ -48,126 +38,129 @@ jobs:
         run: |
           cat > capture.sh << 'SCRIPT'
           #!/usr/bin/env bash
-          # No set -e — so video is always pulled even if a tap lands wrong
 
           PKG="com.rakshapal.library"
           MAIN="com.rakshapal.library/.MainActivity"
-          DELAY=7   # generous delay for animations to finish
+          DELAY=8
 
           mkdir -p screenshots
 
-          # ── Helpers ───────────────────────────────────────────────────────
-          screenshot() { adb exec-out screencap -p > "screenshots/$1.png" && echo "  ✓ $1.png"; }
-          tap()        { adb shell input tap "$1" "$2"; sleep 1; }
-          swipe_up()   { adb shell input swipe 540 1400 540 400 600; sleep 2; }
-          go_back()    { adb shell input keyevent KEYCODE_BACK; sleep 3; }
+          # ── STEP 1: Download APK now (emulator is already running) ────────
+          echo ">>> Downloading APK into emulator runner..."
+          curl -L \
+            "https://github.com/Vishnu-Hack39965/App-Creation/releases/download/v1.0.63/app-debug.apk" \
+            -o /tmp/app-debug.apk
+          echo "APK size: $(du -sh /tmp/app-debug.apk)"
 
-          # ── Install ───────────────────────────────────────────────────────
-          echo ">>> Installing APK"
-          adb install -r app-debug.apk
+          # ── STEP 2: Install ───────────────────────────────────────────────
+          echo ">>> Installing APK on emulator"
+          adb install -r /tmp/app-debug.apk
+          echo "Install done"
 
+          # ── STEP 3: Grant permissions ─────────────────────────────────────
           echo ">>> Granting permissions"
           adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
           adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
 
-          echo ">>> Unlock screen"
+          # ── STEP 4: Unlock screen ─────────────────────────────────────────
           adb shell input keyevent 82
-          sleep 1
+          sleep 2
 
-          # ── Start recording ───────────────────────────────────────────────
+          # ── STEP 5: Launch app FIRST to confirm it works ──────────────────
+          echo ">>> Launching app"
+          adb shell am start -n "$MAIN"
+          sleep $DELAY
+
+          # ── STEP 6: Start screen recording AFTER app is open ─────────────
           echo ">>> Starting screen recording"
           adb shell screenrecord --time-limit 170 /sdcard/demo.mp4 &
           RECORD_PID=$!
           sleep 2
 
-          # ═════════════════════════════════════════════════════════════════
-          # PHOTO 1 — Main screen
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
+          # ══════════════════════════════════════════════════════════════════
+          # PHOTO 1 — Main screen (app already open)
+          # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 1: Main Screen ==="
-          adb shell am start -n "$MAIN"
+          adb exec-out screencap -p > screenshots/01_main_screen.png
+          echo "✓ Photo 1"
+
+          # ══════════════════════════════════════════════════════════════════
+          # PHOTO 2 — Offline Dashboard: no data state
+          # Tap the top button "📊 Offline Dashboard"
+          # ══════════════════════════════════════════════════════════════════
+          echo "=== PHOTO 2: Dashboard no data ==="
+          # Pixel 4 is 1080x2280. The card has 3 buttons stacked.
+          # We find the button by tapping screen centre-X, and Y just below
+          # vertical centre (card is centred on screen, buttons start ~y=1450)
+          adb shell input tap 540 1450
           sleep $DELAY
-          screenshot "01_main_screen"
+          adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
+          echo "✓ Photo 2"
 
-          # ═════════════════════════════════════════════════════════════════
-          # PHOTO 2 — Offline Dashboard (no data)
-          # Tap the top button "📊 Offline Dashboard" in the card
-          # Pixel 4: 1080x2280. Card centre ~y=1140. Dashboard btn ~y=1500
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
-          echo "=== PHOTO 2: Dashboard — no data ==="
-          tap 540 1500
-          sleep $DELAY
-          screenshot "02_dashboard_no_data"
+          # ══════════════════════════════════════════════════════════════════
+          # Tap "Load Sample Data" button to populate data.
+          # On no-data screen this button is shown near bottom.
+          # ══════════════════════════════════════════════════════════════════
+          echo "=== Tapping Load Sample Data ==="
+          # Scroll down slightly to expose button
+          adb shell input swipe 540 1100 540 700 300
+          sleep 1
+          adb exec-out screencap -p > screenshots/02b_before_sample_tap.png
+          # Tap button (centred, near bottom of visible area ~y=1400)
+          adb shell input tap 540 1400
+          sleep 5
+          adb exec-out screencap -p > screenshots/02c_after_sample_tap.png
+          echo "✓ Sample data loaded"
 
-          # ═════════════════════════════════════════════════════════════════
-          # Now tap "Load Sample Data" button to populate data.
-          # This button is near the bottom of the no-data screen.
-          # We'll find it by scrolling down first.
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
-          echo "=== Loading sample data via in-app button ==="
-          # The no-data screen shows message + sample button below.
-          # Scroll down a little to make sure button is visible
-          adb shell input swipe 540 1200 540 700 400
-          sleep 2
-          # Tap sample button — approximately y=1500 after scroll
-          tap 540 1500
-          sleep 4   # wait for data to save and dashboard to refresh
-
-          screenshot "02b_after_sample_load"
-
-          # ═════════════════════════════════════════════════════════════════
-          # PHOTO 3 — Dashboard top (with data: name, survival timer visible)
-          # Scroll back to top first
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
+          # ══════════════════════════════════════════════════════════════════
+          # PHOTO 3 — Dashboard top with data (scroll back to top)
+          # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 3: Dashboard with data (top) ==="
-          adb shell input swipe 540 400 540 1400 400   # scroll to top
+          adb shell input swipe 540 500 540 1400 400
           sleep 2
-          screenshot "03_dashboard_top_with_data"
+          adb exec-out screencap -p > screenshots/03_dashboard_with_data_top.png
+          echo "✓ Photo 3"
 
-          # ═════════════════════════════════════════════════════════════════
-          # PHOTO 4 — Dashboard scrolled down (WiFi connect buttons)
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
-          echo "=== PHOTO 4: Dashboard scrolled — WiFi buttons ==="
-          swipe_up
-          screenshot "04_dashboard_wifi_buttons"
+          # ══════════════════════════════════════════════════════════════════
+          # PHOTO 4 — Dashboard scrolled: WiFi buttons
+          # ══════════════════════════════════════════════════════════════════
+          echo "=== PHOTO 4: Dashboard scrolled (WiFi buttons) ==="
+          adb shell input swipe 540 1400 540 400 500
+          sleep 2
+          adb exec-out screencap -p > screenshots/04_dashboard_wifi_buttons.png
+          echo "✓ Photo 4"
 
-          # ═════════════════════════════════════════════════════════════════
+          # ══════════════════════════════════════════════════════════════════
           # PHOTO 5 — After tapping Connect WiFi 1
-          # Button is visible on screen after scroll, approx y=900
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
+          # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 5: After WiFi connect tap ==="
-          tap 540 900
+          adb shell input tap 540 900
           sleep 4
-          screenshot "05_after_wifi_connect"
+          adb exec-out screencap -p > screenshots/05_after_wifi_connect.png
+          echo "✓ Photo 5"
 
-          # ═════════════════════════════════════════════════════════════════
+          # ══════════════════════════════════════════════════════════════════
           # PHOTO 6 — Back to Main screen
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
+          # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 6: Main screen (after Dashboard) ==="
-          go_back
-          sleep 2
-          adb shell am start -n "$MAIN"
-          sleep $DELAY
-          screenshot "06_main_after_dashboard"
+          adb shell input keyevent KEYCODE_BACK
+          sleep 4
+          adb exec-out screencap -p > screenshots/06_main_after_dashboard.png
+          echo "✓ Photo 6"
 
-          # ═════════════════════════════════════════════════════════════════
-          # PHOTO 7 — Go to Home Page (opens Chrome Custom Tab)
-          # btnHome is second button in card, approx y=1620
-          # ═════════════════════════════════════════════════════════════════
-          echo ""
-          echo "=== PHOTO 7: Home page (CCT) ==="
-          tap 540 1620
-          sleep 6
-          screenshot "07_home_page_cct"
+          # ══════════════════════════════════════════════════════════════════
+          # PHOTO 7 — Tap Go to Home Page (Chrome Custom Tab)
+          # btnHome is 2nd button ~y=1580
+          # ══════════════════════════════════════════════════════════════════
+          echo "=== PHOTO 7: Go to Home Page ==="
+          adb shell input tap 540 1580
+          sleep 7
+          adb exec-out screencap -p > screenshots/07_home_page_cct.png
+          echo "✓ Photo 7"
 
-          # ── Stop recording & pull video ───────────────────────────────────
-          echo ""
+          # ══════════════════════════════════════════════════════════════════
+          # Pull video
+          # ══════════════════════════════════════════════════════════════════
           echo "=== Pulling video ==="
           kill $RECORD_PID 2>/dev/null || true
           adb shell pkill -2 screenrecord 2>/dev/null || true
@@ -216,7 +209,7 @@ jobs:
         run: |
           FOLDER="screenshots/run-${{ github.run_number }}"
           mkdir -p "$FOLDER"
-          cp screenshots/*.png   "$FOLDER/" 2>/dev/null || true
+          cp screenshots/*.png    "$FOLDER/" 2>/dev/null || true
           cp screenshots/demo.mp4 "$FOLDER/" 2>/dev/null || true
 
           git config user.name  "github-actions[bot]"
