@@ -112,7 +112,9 @@ jobs:
           #   Go to Home Page btn    centre → x=370, y=915
           #   Exit App btn           centre → x=370, y=1043
           # ──────────────────────────────────────────────────────────────────
-
+          sleep 2
+          echo "=== Google Sign in accepted ==="
+          adb shell input tap 370 980
           # ══════════════════════════════════════════════════════════════════
           # PHOTO 2 — Offline Dashboard: no data
           # ══════════════════════════════════════════════════════════════════
