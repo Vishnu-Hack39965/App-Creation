@@ -114,7 +114,7 @@ jobs:
           # ──────────────────────────────────────────────────────────────────
           sleep 2
           echo "=== Google Sign in accepted ==="
-          adb shell input tap 370 1020
+          adb shell input tap 370 980
           sleep 2
           # ══════════════════════════════════════════════════════════════════
           # PHOTO 2 — Offline Dashboard: no data
