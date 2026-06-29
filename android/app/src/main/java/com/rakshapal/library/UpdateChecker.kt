@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.FileObserver
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.content.FileProvider
@@ -21,37 +24,58 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 
 object UpdateConfig {
-    const val GITHUB_API_URL    = "https://api.github.com/repos/Vishnu-Hack39965/App-Creation/releases/latest"
-    const val APK_DOWNLOAD_URL  = "https://github.com/Vishnu-Hack39965/App-Creation/releases/latest/download/app-debug.apk"
-    const val APK_FILE_NAME     = "update.apk"
-    const val WORK_NAME         = "periodic_update_check"
-    const val TAG               = "AutoUpdate"
+    const val GITHUB_API_URL   = "https://api.github.com/repos/Vishnu-Hack39965/App-Creation/releases/latest"
+    const val APK_DOWNLOAD_URL = "https://github.com/Vishnu-Hack39965/App-Creation/releases/latest/download/app-debug.apk"
+    const val APK_FILE_NAME    = "update.apk"
+    const val WORK_NAME        = "periodic_update_check"
+    const val TAG              = "AutoUpdate"
+    const val PREFS            = "update_prefs"
+    const val KEY_READY        = "update_ready"
+    const val KEY_VERSION      = "update_version"
+    const val KEY_DIALOG_SHOWN = "update_dialog_shown"   // tracks whether dialog is currently active
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Background UpdateWorker  — runs every 15 min when network available
+// Downloads APK silently; marks update_ready in SharedPrefs.
+// Does NOT clear update_ready after download — that only happens
+// when the user actually installs (i.e. dialog button tapped) or
+// after a fresh install overrides the version check.
+// ═══════════════════════════════════════════════════════════════════
 class UpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         Log.d(UpdateConfig.TAG, "Background check running…")
-        val latestVersion = fetchLatestVersionName() ?: return Result.retry()
-        val currentVersion = applicationContext.packageManager
-            .getPackageInfo(applicationContext.packageName, 0).versionName
-        if (isNewer(latestVersion, currentVersion)) {
-            Log.d(UpdateConfig.TAG, "New version $latestVersion found, downloading silently…")
-            val success = downloadApkSilently(applicationContext)
-            if (success) {
-                applicationContext
-                    .getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("update_ready", true)
-                    .putString("update_version", latestVersion)
-                    .apply()
-            }
-        } else {
+        val latestVersion  = fetchLatestVersionName() ?: return Result.retry()
+        val currentVersion = try {
+            applicationContext.packageManager
+                .getPackageInfo(applicationContext.packageName, 0).versionName
+        } catch (e: PackageManager.NameNotFoundException) { return Result.retry() }
+
+        if (!isNewer(latestVersion, currentVersion)) {
             Log.d(UpdateConfig.TAG, "Already on latest ($currentVersion)")
+            // Clean up any stale ready-flag if somehow version already matches
+            applicationContext.getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE)
+                .edit().remove(UpdateConfig.KEY_READY).remove(UpdateConfig.KEY_VERSION).apply()
+            return Result.success()
+        }
+
+        Log.d(UpdateConfig.TAG, "New version $latestVersion — downloading…")
+        val success = downloadApkSilently(applicationContext)
+        if (success) {
+            applicationContext.getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(UpdateConfig.KEY_READY, true)
+                .putString(UpdateConfig.KEY_VERSION, latestVersion)
+                .apply()
+            Log.d(UpdateConfig.TAG, "Download done — update_ready=true")
         }
         return Result.success()
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Version helpers
+// ═══════════════════════════════════════════════════════════════════
 suspend fun fetchLatestVersionName(): String? = withContext(Dispatchers.IO) {
     try {
         val conn = URL(UpdateConfig.GITHUB_API_URL).openConnection() as HttpURLConnection
@@ -80,11 +104,13 @@ fun isNewer(remote: String, current: String): Boolean {
     return false
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Download
+// ═══════════════════════════════════════════════════════════════════
 suspend fun downloadApkSilently(context: Context): Boolean = withContext(Dispatchers.IO) {
     try {
-        val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            UpdateConfig.APK_FILE_NAME)
-        if (apkFile.exists()) { apkFile.delete() }
+        val apkFile = getApkFile(context)
+        if (apkFile.exists()) apkFile.delete()
         val conn = URL(UpdateConfig.APK_DOWNLOAD_URL).openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout    = 60_000
@@ -94,7 +120,7 @@ suspend fun downloadApkSilently(context: Context): Boolean = withContext(Dispatc
         input.copyTo(output)
         output.flush(); output.close(); input.close()
         conn.disconnect()
-        Log.d(UpdateConfig.TAG, "APK downloaded to ${apkFile.absolutePath}")
+        Log.d(UpdateConfig.TAG, "APK at ${apkFile.absolutePath}")
         true
     } catch (e: Exception) {
         Log.e(UpdateConfig.TAG, "Download failed: ${e.message}")
@@ -102,35 +128,90 @@ suspend fun downloadApkSilently(context: Context): Boolean = withContext(Dispatc
     }
 }
 
+fun getApkFile(context: Context): File =
+    File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), UpdateConfig.APK_FILE_NAME)
+
+// ═══════════════════════════════════════════════════════════════════
+// promptInstall
+// FIX (f): dialog persists across app restarts because update_ready
+//           stays true until the user actually taps "Install".
+//           We only clear KEY_READY after they tap the button.
+// FIX (e): we bring MainActivity to front BEFORE showing the dialog
+//           so it appears over the CCT properly.
+// FIX (d): FileObserver watches the apk file — the instant it lands
+//           on disk the dialog fires on the main thread.
+// ═══════════════════════════════════════════════════════════════════
 fun promptInstall(context: Context, versionName: String = "") {
-    val apkFile = File(
-        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-        UpdateConfig.APK_FILE_NAME
-    )
-    if (!apkFile.exists()) return
+    val apkFile = getApkFile(context)
+    if (!apkFile.exists()) {
+        Log.w(UpdateConfig.TAG, "promptInstall: APK file not found — cannot show dialog")
+        return
+    }
 
     val displayVersion = if (versionName.isNotBlank()) versionName else "a new version"
     val message = "Rakshapal Library $displayVersion is available.\n\nPlease install it to continue using the app."
 
     val dialog = AlertDialog.Builder(context)
-        .setTitle("Update Required")
+        .setTitle("🔔 Update Required")
         .setMessage(message)
-        .setPositiveButton("Install") { _, _ -> installApk(context, apkFile) }
-        .setCancelable(false)
+        .setPositiveButton("Install Now") { _, _ ->
+            // Only clear the flag when user actually taps Install
+            context.getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(UpdateConfig.KEY_READY)
+                .remove(UpdateConfig.KEY_VERSION)
+                .apply()
+            installApk(context, apkFile)
+        }
+        .setCancelable(false)   // dialog cannot be dismissed without tapping Install
         .create()
 
-    dialog.setOnKeyListener { _, keyCode, _ ->
-        keyCode == KeyEvent.KEYCODE_BACK
-    }
-
+    // Block back button as well
+    dialog.setOnKeyListener { _, keyCode, _ -> keyCode == KeyEvent.KEYCODE_BACK }
     dialog.show()
+    Log.d(UpdateConfig.TAG, "Install dialog shown for version $displayVersion")
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// startApkFileWatcher  (FIX d)
+// Watches the APK download directory. The moment the file appears
+// (FileObserver.CLOSE_WRITE) it fires promptInstall on main thread.
+// Call this once from MainActivity.onCreate().
+// ═══════════════════════════════════════════════════════════════════
+private var fileObserver: FileObserver? = null
+
+fun startApkFileWatcher(context: Context) {
+    val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
+    val handler = Handler(Looper.getMainLooper())
+
+    @Suppress("DEPRECATION")
+    fileObserver = object : FileObserver(dir.absolutePath, CLOSE_WRITE) {
+        override fun onEvent(event: Int, path: String?) {
+            if (path == UpdateConfig.APK_FILE_NAME) {
+                Log.d(UpdateConfig.TAG, "FileObserver: APK write complete — posting dialog")
+                val prefs = context.getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE)
+                val version = prefs.getString(UpdateConfig.KEY_VERSION, "") ?: ""
+                handler.post { promptInstall(context, version) }
+            }
+        }
+    }
+    fileObserver?.startWatching()
+    Log.d(UpdateConfig.TAG, "APK file watcher started on ${dir.absolutePath}")
+}
+
+fun stopApkFileWatcher() {
+    fileObserver?.stopWatching()
+    fileObserver = null
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// installApk
+// ═══════════════════════════════════════════════════════════════════
 fun installApk(context: Context, apkFile: File) {
     val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
     } else {
-        Uri.fromFile(apkFile)
+        @Suppress("DEPRECATION") Uri.fromFile(apkFile)
     }
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, "application/vnd.android.package-archive")
@@ -140,6 +221,9 @@ fun installApk(context: Context, apkFile: File) {
     context.startActivity(intent)
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// schedulePeriodicCheck
+// ═══════════════════════════════════════════════════════════════════
 fun schedulePeriodicCheck(context: Context) {
     val request = PeriodicWorkRequestBuilder<UpdateWorker>(15, TimeUnit.MINUTES)
         .setConstraints(
