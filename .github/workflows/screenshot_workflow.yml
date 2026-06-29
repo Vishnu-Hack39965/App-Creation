@@ -121,7 +121,7 @@ jobs:
           adb pull /data/local/tmp/window_dump.xml ./window_dump.xml > /dev/null
 
           # 3. Parse the XML to find the button bounds and calculate the center X and Y
-          COORDS=$(grep -oP 'text="([^"]*(While using the app|Allow|Only this time)[^"]*)"[^>]*bounds="\[\d+,\d+\]\[\d+,\d+\]"' window_dump.xml | grep -oP 'bounds="\[\d+,\d+\]\[\d+,\d+\]"' | sed 's/bounds="//; s/"//' | head -n 1)
+          COORDS=$(grep -oP 'text="([^"]*(While using the app|Only this time)[^"]*)"[^>]*bounds="\[\d+,\d+\]\[\d+,\d+\]"' window_dump.xml | grep -oP 'bounds="\[\d+,\d+\]\[\d+,\d+\]"' | sed 's/bounds="//; s/"//' | head -n 1)
 
           if [ -z "$COORDS" ]; then
               echo "❌ Permission button text not found in UI dump!"
