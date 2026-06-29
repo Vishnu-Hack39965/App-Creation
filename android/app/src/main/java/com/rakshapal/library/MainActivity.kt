@@ -38,22 +38,24 @@ class MainActivity : AppCompatActivity() {
     private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var floatAnimator: ObjectAnimator? = null
 
-    private var lastCctIntent: Intent? = null
-
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Schedule all background workers
         schedulePeriodicCheck(this)
-        scheduleSurvivalWorker(this)      // NEW: schedule 3-hour survival updater
-        scheduleWifiRemovalWorker(this)   // NEW: schedule 6am/6pm wifi removal
+        scheduleSurvivalWorker(this)
+        scheduleWifiRemovalWorker(this)
+
+        // FIX (d): watch for APK landing on disk — show dialog immediately
+        startApkFileWatcher(this)
 
         runEntranceAnimations()
 
         // ── Button wiring ──────────────────────────────────────────────────
         findViewById<Button>(R.id.btnHome).setOnClickListener { view ->
-            animateButtonPress(view) { openInCustomTab(LIBRARY_URL) }
+            animateButtonPress(view) { openHomePage() }
         }
         findViewById<Button>(R.id.btnDashboard).setOnClickListener { view ->
             animateButtonPress(view) {
@@ -67,33 +69,82 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // FIX (c) & (f): check on every open whether a pending update exists
         checkForUpdateOnOpen()
+
         handleDeepLink(intent)
 
+        // FIX (b): request location — keep asking until granted
         if (intent.data == null) {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-                openInCustomTab(LIBRARY_URL)
+            ensureLocationPermissionThenOpen()
+        }
+    }
+
+    // ── FIX (b): keep asking until location is granted, never open without it ──
+
+    private fun ensureLocationPermissionThenOpen() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            openHomePage()
+        } else {
+            // Show a Toast explaining why, then request again
+            Toast.makeText(
+                this,
+                "📍 Location permission is required to connect to Wi-Fi.\nPlease allow it.",
+                Toast.LENGTH_LONG
+            ).show()
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Granted — proceed to open home
+                openHomePage()
             } else {
-                requestPermissions(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                    PERMISSION_REQUEST_CODE
-                )
+                // FIX (b): denied — show reason and ask AGAIN immediately (loop)
+                Toast.makeText(
+                    this,
+                    "❌ Permission denied.\nThis app cannot work without Location permission.\nPlease allow it.",
+                    Toast.LENGTH_LONG
+                ).show()
+                Handler(mainLooper).postDelayed({
+                    // Re-request — will keep appearing until user grants it
+                    requestPermissions(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                        PERMISSION_REQUEST_CODE
+                    )
+                }, 2500)
             }
         }
+    }
+
+    // ── Open home page (CCT) ───────────────────────────────────────────────
+
+    private fun openHomePage() {
+        openInCustomTab(LIBRARY_URL)
     }
 
     // ── Entrance Animations ────────────────────────────────────────────────
 
     private fun runEntranceAnimations() {
-        val card      = findViewById<CardView>(R.id.mainCard)
-        val icon      = findViewById<ImageView>(R.id.appIcon)
-        val appName   = findViewById<TextView>(R.id.appName)
-        val divider   = findViewById<View>(R.id.divider)
-        val version   = findViewById<TextView>(R.id.appVersion)
-        val btnHome   = findViewById<Button>(R.id.btnHome)
-        val btnDash   = findViewById<Button>(R.id.btnDashboard)
-        val btnExit   = findViewById<Button>(R.id.btnExit)
+        val card    = findViewById<CardView>(R.id.mainCard)
+        val icon    = findViewById<ImageView>(R.id.appIcon)
+        val appName = findViewById<TextView>(R.id.appName)
+        val divider = findViewById<View>(R.id.divider)
+        val version = findViewById<TextView>(R.id.appVersion)
+        val btnDash = findViewById<Button>(R.id.btnDashboard)
+        val btnHome = findViewById<Button>(R.id.btnHome)
+        val btnExit = findViewById<Button>(R.id.btnExit)
 
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName
@@ -107,35 +158,25 @@ class MainActivity : AppCompatActivity() {
 
         card.visibility = View.VISIBLE
         card.startAnimation(cardAnim)
-
         Handler(Looper.getMainLooper()).postDelayed({
-            icon.visibility = View.VISIBLE
-            icon.startAnimation(iconAnim)
+            icon.visibility = View.VISIBLE; icon.startAnimation(iconAnim)
         }, 200)
-
         Handler(Looper.getMainLooper()).postDelayed({
-            appName.visibility = View.VISIBLE
-            divider.visibility = View.VISIBLE
+            appName.visibility = View.VISIBLE; divider.visibility = View.VISIBLE
             version.visibility = View.VISIBLE
-            appName.startAnimation(titleAnim)
-            divider.startAnimation(titleAnim)
+            appName.startAnimation(titleAnim); divider.startAnimation(titleAnim)
             version.startAnimation(titleAnim)
         }, 350)
-
         Handler(Looper.getMainLooper()).postDelayed({
-            btnHome.visibility = View.VISIBLE
-            btnDash.visibility = View.VISIBLE
+            btnDash.visibility = View.VISIBLE; btnHome.visibility = View.VISIBLE
             btnExit.visibility = View.VISIBLE
-            btnHome.startAnimation(buttonsAnim)
-            btnDash.startAnimation(buttonsAnim)
+            btnDash.startAnimation(buttonsAnim); btnHome.startAnimation(buttonsAnim)
             btnExit.startAnimation(buttonsAnim)
         }, 700)
-
         Handler(Looper.getMainLooper()).postDelayed({
             floatAnimator = AnimatorInflater
                 .loadAnimator(this, R.animator.card_float) as ObjectAnimator
-            floatAnimator?.target = card
-            floatAnimator?.start()
+            floatAnimator?.target = card; floatAnimator?.start()
         }, 1300)
     }
 
@@ -148,82 +189,84 @@ class MainActivity : AppCompatActivity() {
     // ── Chrome Custom Tab ──────────────────────────────────────────────────
 
     private fun openInCustomTab(url: String) {
-        val customTabsIntent = CustomTabsIntent.Builder()
+        val cti = CustomTabsIntent.Builder()
             .setShowTitle(true)
             .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
             .build()
-        customTabsIntent.intent.apply {
+        cti.intent.apply {
             setPackage("com.android.chrome")
             addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
         }
         try {
-            customTabsIntent.launchUrl(this, Uri.parse(url))
-            lastCctIntent = customTabsIntent.intent
+            cti.launchUrl(this, Uri.parse(url))
         } catch (e: Exception) {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-            startActivity(browserIntent)
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY))
         }
     }
 
+    // FIX (e): bring MainActivity to front so dialog shows OVER the CCT
     private fun closeCctAndBringToFront() {
         try {
-            val bringFront = Intent(this, MainActivity::class.java).apply {
+            startActivity(Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            startActivity(bringFront)
-        } catch (e: Exception) {
-            Log.e("CCT", "Could not close CCT: ${e.message}")
-        }
+            })
+        } catch (e: Exception) { Log.e("CCT", "reorder failed: ${e.message}") }
+
         try {
-            val home = Intent(Intent.ACTION_MAIN).apply {
+            startActivity(Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(home)
+            })
             Handler(Looper.getMainLooper()).postDelayed({
-                val reopen = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                packageManager.getLaunchIntentForPackage(packageName)?.apply {
                     addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                }
-                if (reopen != null) startActivity(reopen)
+                }?.also { startActivity(it) }
             }, 300)
-        } catch (e: Exception) {
-            Log.e("CCT", "Home+reopen failed: ${e.message}")
-        }
+        } catch (e: Exception) { Log.e("CCT", "home+reopen failed: ${e.message}") }
     }
 
-    // ── On-open update check ───────────────────────────────────────────────
+    // ── FIX (c) & (f): Check for pending update on EVERY open ────────────
+    // KEY_READY stays true across app restarts until user taps "Install Now".
+    // So even after closing and reopening the app the dialog reappears.
 
     private fun checkForUpdateOnOpen() {
         updateScope.launch {
-            val prefs = getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
-            if (prefs.getBoolean("update_ready", false)) {
-                val apkFile = File(
-                    getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                    UpdateConfig.APK_FILE_NAME
-                )
+            val prefs = getSharedPreferences(UpdateConfig.PREFS, Context.MODE_PRIVATE)
+
+            // Case 1: update already downloaded and waiting
+            if (prefs.getBoolean(UpdateConfig.KEY_READY, false)) {
+                val apkFile = getApkFile(this@MainActivity)
                 if (apkFile.exists()) {
-                    val savedVersion = prefs.getString("update_version", "") ?: ""
-                    prefs.edit().putBoolean("update_ready", false).apply()
+                    val savedVersion = prefs.getString(UpdateConfig.KEY_VERSION, "") ?: ""
+                    // FIX (e): bring this Activity to front before showing dialog
                     closeCctAndBringToFront()
-                    delay(600)
+                    delay(700)
                     promptInstall(this@MainActivity, savedVersion)
                     return@launch
+                } else {
+                    // APK was cleared (e.g. uninstall cleaned storage) — reset flag
+                    prefs.edit().remove(UpdateConfig.KEY_READY).remove(UpdateConfig.KEY_VERSION).apply()
                 }
             }
+
+            // Case 2: no pending APK — check GitHub for new version
             if (!isNetworkAvailable()) return@launch
             val latestVersion = fetchLatestVersionName() ?: return@launch
             val currentVersion = try {
                 packageManager.getPackageInfo(packageName, 0).versionName
             } catch (e: PackageManager.NameNotFoundException) { return@launch }
             if (!isNewer(latestVersion, currentVersion)) return@launch
+
+            Log.d(UpdateConfig.TAG, "Newer version $latestVersion found — downloading…")
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
+                // FIX (e): bring to front so dialog is visible
                 closeCctAndBringToFront()
-                delay(600)
+                delay(700)
                 promptInstall(this@MainActivity, latestVersion)
             }
         }
@@ -240,6 +283,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         floatAnimator?.cancel()
         updateScope.cancel()
+        stopApkFileWatcher()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -249,28 +293,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Overridden to disable back navigation")
-    override fun onBackPressed() { }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                openInCustomTab(LIBRARY_URL)
-            } else {
-                Toast.makeText(this,
-                    "Location permission is required to use this app.\nPlease allow it to continue.",
-                    Toast.LENGTH_LONG).show()
-                Handler(mainLooper).postDelayed({
-                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                        PERMISSION_REQUEST_CODE)
-                }, 3000)
-            }
-        }
-    }
+    override fun onBackPressed() { /* disabled */ }
 
     // ── Deep link handler ──────────────────────────────────────────────────
 
@@ -280,20 +303,18 @@ class MainActivity : AppCompatActivity() {
         if (data.scheme != "mylibraryapp") return
         when (data.host) {
             "wifi" -> {
-                // Extract all parameters
-                val ssid         = data.getQueryParameter("ssid")         ?: ""
-                val pass         = data.getQueryParameter("pass")         ?: ""
-                val ssid2        = data.getQueryParameter("ssid2")        ?: ""
-                val pass2        = data.getQueryParameter("pass2")        ?: ""
-                val survivalStr  = data.getQueryParameter("usersurvivaltime") ?: "0"
-                val name         = data.getQueryParameter("name")         ?: ""
-                val father       = data.getQueryParameter("father")       ?: ""
-                val phone        = data.getQueryParameter("phone")        ?: ""
-                val address      = data.getQueryParameter("address")      ?: ""
+                val ssid        = data.getQueryParameter("ssid")              ?: ""
+                val pass        = data.getQueryParameter("pass")              ?: ""
+                val ssid2       = data.getQueryParameter("ssid2")             ?: ""
+                val pass2       = data.getQueryParameter("pass2")             ?: ""
+                val survivalStr = data.getQueryParameter("usersurvivaltime")  ?: "0"
+                val name        = data.getQueryParameter("name")              ?: ""
+                val father      = data.getQueryParameter("father")            ?: ""
+                val phone       = data.getQueryParameter("phone")             ?: ""
+                val address     = data.getQueryParameter("address")           ?: ""
 
                 val survivalDays = survivalStr.toDoubleOrNull() ?: 0.0
 
-                // Save everything to appdata
                 UserDataManager.saveAll(
                     context      = this,
                     name         = name,
@@ -307,12 +328,11 @@ class MainActivity : AppCompatActivity() {
                     survivalDays = survivalDays
                 )
 
-                // Connect primary wifi immediately
                 if (ssid.isNotBlank() && pass.isNotBlank()) {
                     connectToLibraryWifi(ssid, pass, ssid2, pass2)
                 }
 
-                // Open Offline Dashboard
+                // Open Offline Dashboard immediately after saving data
                 startActivity(Intent(this, OfflineDashboardActivity::class.java))
             }
             "forgetwifi" -> forgetLibraryWifi()
@@ -320,7 +340,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── MediaDrm device ID ─────────────────────────────────────────────────
+    // ── MediaDrm ──────────────────────────────────────────────────────────
 
     private fun handleGetDeviceId(callbackUrl: String?) {
         try {
@@ -328,20 +348,17 @@ class MainActivity : AppCompatActivity() {
             val deviceIdBytes = mediaDrm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID)
             mediaDrm.close()
             val deviceIdHex = deviceIdBytes.joinToString("") { "%02x".format(it) }
-            if (!callbackUrl.isNullOrBlank()) {
-                val returnUri = Uri.parse(callbackUrl).buildUpon()
-                    .appendQueryParameter("drm_id", deviceIdHex).build().toString()
-                openInCustomTab(returnUri)
-            } else { openInCustomTab(LIBRARY_URL) }
+            val returnUrl = if (!callbackUrl.isNullOrBlank())
+                Uri.parse(callbackUrl).buildUpon().appendQueryParameter("drm_id", deviceIdHex).build().toString()
+            else LIBRARY_URL
+            openInCustomTab(returnUrl)
         } catch (e: Exception) {
             Log.e("MediaDrm", "Failed: ${e.message}")
-            Toast.makeText(this, "Device verification failed. Please try again.",
-                Toast.LENGTH_LONG).show()
-            if (!callbackUrl.isNullOrBlank()) {
-                val errorUri = Uri.parse(callbackUrl).buildUpon()
-                    .appendQueryParameter("drm_error", "extraction_failed").build().toString()
-                openInCustomTab(errorUri)
-            } else { openInCustomTab(LIBRARY_URL) }
+            Toast.makeText(this, "Device verification failed. Please try again.", Toast.LENGTH_LONG).show()
+            val errorUrl = if (!callbackUrl.isNullOrBlank())
+                Uri.parse(callbackUrl).buildUpon().appendQueryParameter("drm_error", "extraction_failed").build().toString()
+            else LIBRARY_URL
+            openInCustomTab(errorUrl)
         }
     }
 
@@ -353,13 +370,10 @@ class MainActivity : AppCompatActivity() {
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Location permission was revoked. Please allow it in Settings.",
                 Toast.LENGTH_LONG).show()
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                PERMISSION_REQUEST_CODE)
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), PERMISSION_REQUEST_CODE)
             return
         }
-
-        val suggestions = mutableListOf<WifiNetworkSuggestion>()
-        suggestions.add(
+        val suggestions = mutableListOf(
             WifiNetworkSuggestion.Builder()
                 .setSsid(ssid).setWpa2Passphrase(pass)
                 .setIsAppInteractionRequired(true).setPriority(999).build()
@@ -371,21 +385,17 @@ class MainActivity : AppCompatActivity() {
                     .setIsAppInteractionRequired(true).setPriority(998).build()
             )
         }
-
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-        wifiManager.addNetworkSuggestions(suggestions)
-        // NOTE: no toast here — Offline Dashboard handles the UI
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wm.removeNetworkSuggestions(wm.networkSuggestions)
+        wm.addNetworkSuggestions(suggestions)
+        // Offline Dashboard shows the result UI — no Toast needed here
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun forgetLibraryWifi() {
-        // Delete all saved user files
         UserDataManager.deleteAll(this)
-        // Remove wifi suggestions
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-        Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.",
-            Toast.LENGTH_LONG).show()
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wm.removeNetworkSuggestions(wm.networkSuggestions)
+        Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.", Toast.LENGTH_LONG).show()
     }
 }
