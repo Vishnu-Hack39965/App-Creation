@@ -1,10 +1,12 @@
 name: App Screenshot & Video Workflow
 
 on:
+  push:
+  branch: [ The-working-app ]
   workflow_dispatch:
 
 permissions:
-  contents: write  # needed to push screenshots folder back to repo
+  contents: write
 
 jobs:
   screenshot:
@@ -13,21 +15,18 @@ jobs:
 
     steps:
 
-      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: The-working-app
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 2. Java ───────────────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── 3. Download latest release APK ───────────────────────────────────
       - name: Download latest release APK
         run: |
           curl -L \
@@ -35,27 +34,138 @@ jobs:
             -o app-debug.apk
           echo "APK size: $(du -sh app-debug.apk)"
           [ $(stat -c%s app-debug.apk) -gt 10000 ] \
-            || (echo "APK download failed or file too small!" && exit 1)
+            || (echo "APK download failed!" && exit 1)
 
-      # ── 4. Enable KVM (hardware acceleration for emulator) ────────────────
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          ls /dev/kvm
 
-      # ── 5. Run everything INSIDE the emulator (reactivecircus handles AVD) ─
-      #
-      #   reactivecircus/android-emulator-runner@v2 is the standard action
-      #   used by Google, Square, CashApp etc. It correctly:
-      #     - installs system image + emulator
-      #     - creates the AVD with the right HOME/PATH
-      #     - boots the emulator and waits for it to be ready
-      #     - then runs our script with adb already working
-      #
-      - name: Run emulator, install APK and capture screenshots
+      # FIX: Write the entire script to a .sh file first,
+      # then pass that single file to reactivecircus.
+      # This means all variables stay in ONE shell process — no more lost vars.
+      - name: Write capture script
+        run: |
+          cat > capture.sh << 'EOF'
+          #!/usr/bin/env bash
+          set -e
+
+          PKG="com.rakshapal.library"
+          MAIN="com.rakshapal.library/.MainActivity"
+          DASH="com.rakshapal.library/.OfflineDashboardActivity"
+          DELAY=5
+
+          mkdir -p screenshots
+
+          echo ">>> Installing APK"
+          adb install -r app-debug.apk
+
+          echo ">>> Granting permissions"
+          adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
+          adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
+
+          echo ">>> Unlock screen"
+          adb shell input keyevent 82
+          sleep 1
+
+          echo ">>> Starting screen recording"
+          adb shell "screenrecord --time-limit 170 /sdcard/demo.mp4 &"
+          sleep 2
+
+          # ── Photo 1: Main screen ──────────────────────────────────────────
+          echo ">>> Photo 1: Main Screen"
+          adb shell am start -n "$MAIN"
+          sleep $DELAY
+          adb exec-out screencap -p > screenshots/01_main_screen.png
+          echo "Photo 1 done"
+
+          # ── Photo 2: Dashboard — no data ──────────────────────────────────
+          echo ">>> Photo 2: Dashboard no data"
+          adb shell am start -n "$DASH"
+          sleep $DELAY
+          adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
+          echo "Photo 2 done"
+
+          # ── Inject sample data via run-as ─────────────────────────────────
+          echo ">>> Injecting sample data"
+
+          adb shell run-as "$PKG" sh -c \
+            'printf "name=Ramesh Kumar\nfather=Suresh Kumar\nphone=9876543210\naddress=12 Gandhi Nagar Agra UP 282001\n" > /data/data/com.rakshapal.library/files/user_data.txt' \
+            || echo "user_data inject failed"
+
+          SSID_B64=$(printf '%s' 'Library_WiFi_5G' | base64 -w0)
+          PASS_B64=$(printf '%s' 'library@2024'    | base64 -w0)
+          SSID2_B64=$(printf '%s' 'Library_WiFi_2G' | base64 -w0)
+          PASS2_B64=$(printf '%s' 'library@2024'    | base64 -w0)
+
+          adb shell run-as "$PKG" sh -c \
+            "printf 'ssid=${SSID_B64}\npass=${PASS_B64}\nssid2=${SSID2_B64}\npass2=${PASS2_B64}\n' > /data/data/com.rakshapal.library/files/wifi_data.txt" \
+            || echo "wifi_data inject failed"
+
+          EPOCH_MS=$(date +%s%3N)
+          SURV_B64=$(printf '%s' "5.75|${EPOCH_MS}" | base64 -w0)
+          adb shell run-as "$PKG" sh -c \
+            "printf '${SURV_B64}\n' > /data/data/com.rakshapal.library/files/survival.txt" \
+            || echo "survival inject failed"
+
+          echo "Sample data injection done"
+
+          # ── Photo 3: Dashboard with injected data ─────────────────────────
+          echo ">>> Photo 3: Dashboard with data"
+          adb shell am start -n "$DASH"
+          sleep $DELAY
+          adb exec-out screencap -p > screenshots/03_dashboard_with_data.png
+          echo "Photo 3 done"
+
+          # ── Tap Load Sample Data button ───────────────────────────────────
+          echo ">>> Tapping sample data button"
+          adb shell input tap 540 1750
+          sleep 3
+          adb exec-out screencap -p > screenshots/03b_after_sample_button.png
+          echo "Photo 3b done"
+
+          # ── Scroll down to WiFi buttons ───────────────────────────────────
+          adb shell input swipe 540 1200 540 400 600
+          sleep 2
+          adb exec-out screencap -p > screenshots/03c_dashboard_scrolled.png
+          echo "Photo 3c done"
+
+          # ── Tap WiFi 1 connect ────────────────────────────────────────────
+          adb shell input tap 540 900
+          sleep 3
+          adb exec-out screencap -p > screenshots/03d_after_wifi_connect.png
+          echo "Photo 3d done"
+
+          # ── Photo 4: Back to Main ─────────────────────────────────────────
+          echo ">>> Photo 4: Back to Main"
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+          adb shell am start -n "$MAIN"
+          sleep $DELAY
+          adb exec-out screencap -p > screenshots/04_main_after_dashboard.png
+          echo "Photo 4 done"
+
+          # ── Photo 5: Tap Go to Home Page ──────────────────────────────────
+          echo ">>> Photo 5: Home page tap"
+          adb shell input tap 540 1300
+          sleep 5
+          adb exec-out screencap -p > screenshots/05_home_page.png
+          echo "Photo 5 done"
+
+          # ── Stop recording & pull video ───────────────────────────────────
+          echo ">>> Stopping recording"
+          adb shell pkill -2 screenrecord 2>/dev/null || true
+          sleep 4
+          adb pull /sdcard/demo.mp4 screenshots/demo.mp4 || echo "Video pull failed"
+
+          echo ">>> All done"
+          ls -lh screenshots/
+          EOF
+          chmod +x capture.sh
+
+      - name: Run emulator and capture
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 31
@@ -69,103 +179,13 @@ jobs:
             -no-window
             -no-boot-anim
             -gpu swiftshader_indirect
+            -no-metrics
             -memory 2048
             -cores 2
             -camera-back none
           disable-animations: true
-          script: |
-            set -e
-            mkdir -p screenshots
+          script: bash capture.sh
 
-            PKG="com.rakshapal.library"
-            MAIN_ACT="$PKG/.MainActivity"
-            DASH_ACT="$PKG/.OfflineDashboardActivity"
-            DELAY=4
-
-            echo "=== Installing APK ==="
-            adb install -r app-debug.apk
-
-            echo "=== Granting permissions ==="
-            adb shell pm grant $PKG android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
-            adb shell pm grant $PKG android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
-
-            echo "=== Starting screen recording ==="
-            adb shell "screenrecord --time-limit 180 /sdcard/demo.mp4" &
-            RECORD_PID=$!
-            sleep 2
-
-            echo "=== Photo 1: Main Screen ==="
-            adb shell am start -n "$MAIN_ACT"
-            sleep $DELAY
-            adb exec-out screencap -p > screenshots/01_main_screen.png
-
-            echo "=== Photo 2: Dashboard - no data ==="
-            adb shell am start -n "$DASH_ACT"
-            sleep $DELAY
-            adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
-
-            echo "=== Injecting sample data ==="
-            # run-as works on debug APKs without needing root
-            adb shell "run-as $PKG sh -c \
-              'printf \"name=Ramesh Kumar\nfather=Suresh Kumar\nphone=9876543210\naddress=12 Gandhi Nagar Agra UP 282001\n\" \
-              > /data/data/$PKG/files/user_data.txt'" || echo "user_data inject failed (will rely on sample button)"
-
-            SSID_B64=$(echo -n  "Library_WiFi_5G" | base64 -w0)
-            PASS_B64=$(echo -n  "library@2024"    | base64 -w0)
-            SSID2_B64=$(echo -n "Library_WiFi_2G" | base64 -w0)
-            PASS2_B64=$(echo -n "library@2024"    | base64 -w0)
-
-            adb shell "run-as $PKG sh -c \
-              'printf \"ssid=${SSID_B64}\npass=${PASS_B64}\nssid2=${SSID2_B64}\npass2=${PASS2_B64}\n\" \
-              > /data/data/$PKG/files/wifi_data.txt'" || echo "wifi_data inject failed"
-
-            EPOCH_MS=$(date +%s%3N)
-            SURVIVAL_B64=$(echo -n "5.75|${EPOCH_MS}" | base64 -w0)
-            adb shell "run-as $PKG sh -c \
-              'echo \"${SURVIVAL_B64}\" > /data/data/$PKG/files/survival.txt'" || echo "survival inject failed"
-
-            echo "=== Photo 3: Dashboard with injected data ==="
-            adb shell am start -n "$DASH_ACT"
-            sleep $DELAY
-            adb exec-out screencap -p > screenshots/03_dashboard_with_data.png
-
-            echo "=== Tapping Load Sample Data button ==="
-            adb shell input tap 540 1750 || true
-            sleep 3
-            adb exec-out screencap -p > screenshots/03b_after_sample_button.png
-
-            echo "=== Scrolling to see WiFi buttons ==="
-            adb shell input swipe 540 1200 540 400 600 || true
-            sleep 2
-            adb exec-out screencap -p > screenshots/03c_dashboard_scrolled.png
-
-            echo "=== Tapping WiFi connect button ==="
-            adb shell input tap 540 900 || true
-            sleep 3
-            adb exec-out screencap -p > screenshots/03d_after_wifi_connect.png
-
-            echo "=== Photo 4: Back to Main screen ==="
-            adb shell input keyevent KEYCODE_BACK || true
-            sleep 2
-            adb shell am start -n "$MAIN_ACT"
-            sleep $DELAY
-            adb exec-out screencap -p > screenshots/04_main_after_dashboard.png
-
-            echo "=== Photo 5: Tap Go to Home Page ==="
-            adb shell input tap 540 1300 || true
-            sleep 5
-            adb exec-out screencap -p > screenshots/05_home_page_cct.png
-
-            echo "=== Stopping screen recording ==="
-            kill $RECORD_PID 2>/dev/null || true
-            adb shell pkill -2 screenrecord 2>/dev/null || true
-            sleep 4
-            adb pull /sdcard/demo.mp4 screenshots/demo.mp4 || echo "Video pull failed"
-
-            echo "=== All done ==="
-            ls -lh screenshots/
-
-      # ── 6. Upload as GitHub Actions artifact (always, even on failure) ─────
       - name: Upload artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -174,7 +194,6 @@ jobs:
           path: screenshots/
           if-no-files-found: warn
 
-      # ── 7. Push screenshots folder directly into repo ─────────────────────
       - name: Push screenshots into repo
         if: always()
         run: |
@@ -188,5 +207,5 @@ jobs:
 
           git add "$FOLDER"
           git diff --cached --quiet \
-            || git commit -m "ci: screenshots & video from run #${{ github.run_number }}"
+            || git commit -m "ci: screenshots & video run #${{ github.run_number }}"
           git push origin The-working-app
