@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="green_live">#2ECC71</color>
+    <color name="red_live">#E74C3C</color>
+    <color name="primary">#1976D2</color>
+</resources>
