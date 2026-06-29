@@ -41,99 +41,139 @@ jobs:
 
           PKG="com.rakshapal.library"
           MAIN="com.rakshapal.library/.MainActivity"
-          DELAY=8
+          DELAY=7
 
           mkdir -p screenshots
 
-          # ── STEP 1: Download APK now (emulator is already running) ────────
-          echo ">>> Downloading APK into emulator runner..."
+          # ── Download APK (emulator already running at this point) ─────────
+          echo ">>> Downloading APK..."
           curl -L \
             "https://github.com/Vishnu-Hack39965/App-Creation/releases/download/v1.0.63/app-debug.apk" \
             -o /tmp/app-debug.apk
           echo "APK size: $(du -sh /tmp/app-debug.apk)"
 
-          # ── STEP 2: Install ───────────────────────────────────────────────
-          echo ">>> Installing APK on emulator"
+          # ── Install APK ───────────────────────────────────────────────────
+          echo ">>> Installing APK"
           adb install -r /tmp/app-debug.apk
-          echo "Install done"
 
-          # ── STEP 3: Grant permissions ─────────────────────────────────────
+          # ── Grant permissions ─────────────────────────────────────────────
           echo ">>> Granting permissions"
           adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
           adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
 
-          # ── STEP 4: Unlock screen ─────────────────────────────────────────
+          # ── Unlock screen ─────────────────────────────────────────────────
           adb shell input keyevent 82
           sleep 2
 
-          # ── STEP 5: Launch app FIRST to confirm it works ──────────────────
-          echo ">>> Launching app"
-          adb shell am start -n "$MAIN"
-          sleep $DELAY
+          # ──────────────────────────────────────────────────────────────────
+          # FIX: Pre-open Chrome and accept the welcome dialog BEFORE
+          # launching our app. This way Chrome is already set up and won't
+          # interrupt our app's CCT with its welcome screen.
+          # ──────────────────────────────────────────────────────────────────
+          echo ">>> Pre-warming Chrome to dismiss welcome dialog..."
+          adb shell am start -a android.intent.action.VIEW \
+            -d "https://example.com" \
+            -n "com.android.chrome/com.google.android.apps.chrome.Main" \
+            2>/dev/null || \
+          adb shell am start -a android.intent.action.VIEW \
+            -d "https://example.com" \
+            --selector --mimetype "text/html" \
+            2>/dev/null || true
+          sleep 6
 
-          # ── STEP 6: Start screen recording AFTER app is open ─────────────
+          # Dismiss "Welcome to Chrome" — tap "Accept & Continue" button
+          # On Pixel 4 (1080x2280) this button is typically around y=1800
+          adb shell input tap 540 1800 2>/dev/null || true
+          sleep 2
+          # Also try dismissing any "Sign in to Chrome" popup — tap "No thanks"
+          adb shell input tap 540 1600 2>/dev/null || true
+          sleep 2
+          # Press back to close Chrome
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+          echo "Chrome pre-warmed"
+
+          # ──────────────────────────────────────────────────────────────────
+          # FIX: Revoke location permission temporarily so the app does NOT
+          # auto-open CCT on launch — giving us clean screenshots of MainActivity.
+          # We will re-grant it before WiFi connect testing.
+          # ──────────────────────────────────────────────────────────────────
+          echo ">>> Revoking location permission temporarily (stops CCT auto-open)"
+          adb shell pm revoke "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
+          adb shell pm revoke "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
+
+          # ── Start screen recording ────────────────────────────────────────
           echo ">>> Starting screen recording"
           adb shell screenrecord --time-limit 170 /sdcard/demo.mp4 &
           RECORD_PID=$!
           sleep 2
 
           # ══════════════════════════════════════════════════════════════════
-          # PHOTO 1 — Main screen (app already open)
+          # PHOTO 1 — Main screen
+          # Without location permission the app shows its own UI and asks
+          # for permission — it does NOT open CCT automatically.
           # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 1: Main Screen ==="
+          adb shell am start -n "$MAIN"
+          sleep $DELAY
+          # Dismiss any permission dialog with BACK so we stay on MainActivity
+          adb shell input keyevent KEYCODE_BACK 2>/dev/null || true
+          sleep 2
           adb exec-out screencap -p > screenshots/01_main_screen.png
           echo "✓ Photo 1"
 
           # ══════════════════════════════════════════════════════════════════
           # PHOTO 2 — Offline Dashboard: no data state
-          # Tap the top button "📊 Offline Dashboard"
+          # Tap "📊 Offline Dashboard" button (top button in card, ~y=1450)
           # ══════════════════════════════════════════════════════════════════
           echo "=== PHOTO 2: Dashboard no data ==="
-          # Pixel 4 is 1080x2280. The card has 3 buttons stacked.
-          # We find the button by tapping screen centre-X, and Y just below
-          # vertical centre (card is centred on screen, buttons start ~y=1450)
           adb shell input tap 540 1450
           sleep $DELAY
           adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
           echo "✓ Photo 2"
 
           # ══════════════════════════════════════════════════════════════════
-          # Tap "Load Sample Data" button to populate data.
-          # On no-data screen this button is shown near bottom.
+          # Tap "Load Sample Data" button to fill dashboard with data.
+          # On the no-data screen the sample button is visible near bottom.
           # ══════════════════════════════════════════════════════════════════
-          echo "=== Tapping Load Sample Data ==="
-          # Scroll down slightly to expose button
-          adb shell input swipe 540 1100 540 700 300
+          echo "=== Loading sample data ==="
+          # Scroll down to expose sample button
+          adb shell input swipe 540 1100 540 600 300
           sleep 1
           adb exec-out screencap -p > screenshots/02b_before_sample_tap.png
-          # Tap button (centred, near bottom of visible area ~y=1400)
-          adb shell input tap 540 1400
+          # Tap the sample button (~y=1300 after scroll)
+          adb shell input tap 540 1300
           sleep 5
           adb exec-out screencap -p > screenshots/02c_after_sample_tap.png
-          echo "✓ Sample data loaded"
+          echo "Sample data loaded"
 
           # ══════════════════════════════════════════════════════════════════
-          # PHOTO 3 — Dashboard top with data (scroll back to top)
+          # PHOTO 3 — Dashboard top: name, father, countdown timer visible
           # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 3: Dashboard with data (top) ==="
+          echo "=== PHOTO 3: Dashboard top with data ==="
           adb shell input swipe 540 500 540 1400 400
           sleep 2
-          adb exec-out screencap -p > screenshots/03_dashboard_with_data_top.png
+          adb exec-out screencap -p > screenshots/03_dashboard_top_data.png
           echo "✓ Photo 3"
 
           # ══════════════════════════════════════════════════════════════════
-          # PHOTO 4 — Dashboard scrolled: WiFi buttons
+          # PHOTO 4 — Dashboard scrolled: WiFi connect buttons
           # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 4: Dashboard scrolled (WiFi buttons) ==="
-          adb shell input swipe 540 1400 540 400 500
+          echo "=== PHOTO 4: Dashboard WiFi buttons ==="
+          adb shell input swipe 540 1400 540 300 600
           sleep 2
           adb exec-out screencap -p > screenshots/04_dashboard_wifi_buttons.png
           echo "✓ Photo 4"
 
+          # Re-grant location permission before WiFi connect test
+          adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
+
           # ══════════════════════════════════════════════════════════════════
-          # PHOTO 5 — After tapping Connect WiFi 1
+          # PHOTO 5 — After tapping Connect WiFi 1 (~y=900 after scroll)
           # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 5: After WiFi connect tap ==="
+          echo "=== PHOTO 5: After WiFi connect ==="
           adb shell input tap 540 900
           sleep 4
           adb exec-out screencap -p > screenshots/05_after_wifi_connect.png
@@ -142,25 +182,24 @@ jobs:
           # ══════════════════════════════════════════════════════════════════
           # PHOTO 6 — Back to Main screen
           # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 6: Main screen (after Dashboard) ==="
+          echo "=== PHOTO 6: Main screen after Dashboard ==="
           adb shell input keyevent KEYCODE_BACK
           sleep 4
           adb exec-out screencap -p > screenshots/06_main_after_dashboard.png
           echo "✓ Photo 6"
 
           # ══════════════════════════════════════════════════════════════════
-          # PHOTO 7 — Tap Go to Home Page (Chrome Custom Tab)
+          # PHOTO 7 — Tap Go to Home Page
+          # Re-grant permission so CCT actually opens
           # btnHome is 2nd button ~y=1580
           # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 7: Go to Home Page ==="
+          echo "=== PHOTO 7: Go to Home Page (CCT) ==="
           adb shell input tap 540 1580
-          sleep 7
+          sleep 8
           adb exec-out screencap -p > screenshots/07_home_page_cct.png
           echo "✓ Photo 7"
 
-          # ══════════════════════════════════════════════════════════════════
-          # Pull video
-          # ══════════════════════════════════════════════════════════════════
+          # ── Pull video ────────────────────────────────────────────────────
           echo "=== Pulling video ==="
           kill $RECORD_PID 2>/dev/null || true
           adb shell pkill -2 screenrecord 2>/dev/null || true
@@ -169,7 +208,6 @@ jobs:
             && echo "✓ Video pulled" \
             || echo "✗ Video pull failed"
 
-          echo ""
           echo "=== All done ==="
           ls -lh screenshots/
           SCRIPT
