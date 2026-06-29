@@ -55,7 +55,6 @@
                 android:layout_marginBottom="4dp"
                 android:visibility="invisible" />
 
-            <!-- Version is set dynamically in MainActivity -->
             <TextView
                 android:id="@+id/appVersion"
                 android:layout_width="wrap_content"
@@ -68,7 +67,23 @@
                 android:gravity="center"
                 android:visibility="invisible" />
 
-            <!-- Go to Home Page — taller, multiline allowed -->
+            <!-- Offline Dashboard — NEW button above Go to Home Page -->
+            <Button
+                android:id="@+id/btnDashboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:text="📊 Offline Dashboard"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/btn_press_dashboard"
+                android:textSize="15sp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:stateListAnimator="@null"
+                android:layout_marginBottom="12dp"
+                android:visibility="invisible" />
+
+            <!-- Go to Home Page -->
             <Button
                 android:id="@+id/btnHome"
                 android:layout_width="match_parent"
