@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
     private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var floatAnimator: ObjectAnimator? = null
 
-    // Tracks the last CCT intent so we can close it
     private var lastCctIntent: Intent? = null
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -47,10 +46,19 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         schedulePeriodicCheck(this)
+        scheduleSurvivalWorker(this)      // NEW: schedule 3-hour survival updater
+        scheduleWifiRemovalWorker(this)   // NEW: schedule 6am/6pm wifi removal
+
         runEntranceAnimations()
 
+        // ── Button wiring ──────────────────────────────────────────────────
         findViewById<Button>(R.id.btnHome).setOnClickListener { view ->
             animateButtonPress(view) { openInCustomTab(LIBRARY_URL) }
+        }
+        findViewById<Button>(R.id.btnDashboard).setOnClickListener { view ->
+            animateButtonPress(view) {
+                startActivity(Intent(this, OfflineDashboardActivity::class.java))
+            }
         }
         findViewById<Button>(R.id.btnExit).setOnClickListener { view ->
             animateButtonPress(view) {
@@ -78,15 +86,15 @@ class MainActivity : AppCompatActivity() {
     // ── Entrance Animations ────────────────────────────────────────────────
 
     private fun runEntranceAnimations() {
-        val card    = findViewById<CardView>(R.id.mainCard)
-        val icon    = findViewById<ImageView>(R.id.appIcon)
-        val appName = findViewById<TextView>(R.id.appName)
-        val divider = findViewById<View>(R.id.divider)
-        val version = findViewById<TextView>(R.id.appVersion)
-        val btnHome = findViewById<Button>(R.id.btnHome)
-        val btnExit = findViewById<Button>(R.id.btnExit)
+        val card      = findViewById<CardView>(R.id.mainCard)
+        val icon      = findViewById<ImageView>(R.id.appIcon)
+        val appName   = findViewById<TextView>(R.id.appName)
+        val divider   = findViewById<View>(R.id.divider)
+        val version   = findViewById<TextView>(R.id.appVersion)
+        val btnHome   = findViewById<Button>(R.id.btnHome)
+        val btnDash   = findViewById<Button>(R.id.btnDashboard)
+        val btnExit   = findViewById<Button>(R.id.btnExit)
 
-        // ── Fix 2: Set version dynamically from PackageManager ──
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (e: PackageManager.NameNotFoundException) { "—" }
@@ -116,8 +124,10 @@ class MainActivity : AppCompatActivity() {
 
         Handler(Looper.getMainLooper()).postDelayed({
             btnHome.visibility = View.VISIBLE
+            btnDash.visibility = View.VISIBLE
             btnExit.visibility = View.VISIBLE
             btnHome.startAnimation(buttonsAnim)
+            btnDash.startAnimation(buttonsAnim)
             btnExit.startAnimation(buttonsAnim)
         }, 700)
 
@@ -156,20 +166,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Fix 3: Close CCT and bring our Activity to front ──────────────────
-
-    /**
-     * Closes the Chrome Custom Tab by broadcasting its close action,
-     * then moves MainActivity back to the foreground.
-     */
     private fun closeCctAndBringToFront() {
-        // Broadcast the CCT close intent (Chrome listens for this)
         try {
-            val closeIntent = Intent().apply {
-                action = "android.support.customtabs.action.CustomTabsService"
-                setPackage("com.android.chrome")
-            }
-            // Move our own task to front first
             val bringFront = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -178,16 +176,12 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("CCT", "Could not close CCT: ${e.message}")
         }
-
-        // Additionally send HOME then reopen our task — this reliably dismisses CCT
         try {
             val home = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(home)
-
-            // After 300ms bring our app back to front
             Handler(Looper.getMainLooper()).postDelayed({
                 val reopen = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                     addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -215,30 +209,20 @@ class MainActivity : AppCompatActivity() {
                     val savedVersion = prefs.getString("update_version", "") ?: ""
                     prefs.edit().putBoolean("update_ready", false).apply()
                     closeCctAndBringToFront()
-                    // Wait for activity to come to front before showing dialog
                     delay(600)
                     promptInstall(this@MainActivity, savedVersion)
                     return@launch
                 }
             }
-
             if (!isNetworkAvailable()) return@launch
-
             val latestVersion = fetchLatestVersionName() ?: return@launch
             val currentVersion = try {
                 packageManager.getPackageInfo(packageName, 0).versionName
             } catch (e: PackageManager.NameNotFoundException) { return@launch }
-
-            if (!isNewer(latestVersion, currentVersion)) {
-                Log.d(UpdateConfig.TAG, "App is up to date ($currentVersion)")
-                return@launch
-            }
-
-            Log.d(UpdateConfig.TAG, "Update $latestVersion available — downloading…")
+            if (!isNewer(latestVersion, currentVersion)) return@launch
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
                 closeCctAndBringToFront()
-                // Wait for activity to come to front before showing dialog
                 delay(600)
                 promptInstall(this@MainActivity, latestVersion)
             }
@@ -246,8 +230,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isNetworkAvailable(): Boolean {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE)
-                as android.net.ConnectivityManager
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         return cm.activeNetworkInfo?.isConnected == true
     }
 
@@ -297,9 +280,40 @@ class MainActivity : AppCompatActivity() {
         if (data.scheme != "mylibraryapp") return
         when (data.host) {
             "wifi" -> {
-                val ssid = data.getQueryParameter("ssid") ?: return
-                val pass = data.getQueryParameter("pass") ?: return
-                connectToLibraryWifi(ssid, pass)
+                // Extract all parameters
+                val ssid         = data.getQueryParameter("ssid")         ?: ""
+                val pass         = data.getQueryParameter("pass")         ?: ""
+                val ssid2        = data.getQueryParameter("ssid2")        ?: ""
+                val pass2        = data.getQueryParameter("pass2")        ?: ""
+                val survivalStr  = data.getQueryParameter("usersurvivaltime") ?: "0"
+                val name         = data.getQueryParameter("name")         ?: ""
+                val father       = data.getQueryParameter("father")       ?: ""
+                val phone        = data.getQueryParameter("phone")        ?: ""
+                val address      = data.getQueryParameter("address")      ?: ""
+
+                val survivalDays = survivalStr.toDoubleOrNull() ?: 0.0
+
+                // Save everything to appdata
+                UserDataManager.saveAll(
+                    context      = this,
+                    name         = name,
+                    father       = father,
+                    phone        = phone,
+                    address      = address,
+                    ssid         = ssid,
+                    pass         = pass,
+                    ssid2        = ssid2,
+                    pass2        = pass2,
+                    survivalDays = survivalDays
+                )
+
+                // Connect primary wifi immediately
+                if (ssid.isNotBlank() && pass.isNotBlank()) {
+                    connectToLibraryWifi(ssid, pass, ssid2, pass2)
+                }
+
+                // Open Offline Dashboard
+                startActivity(Intent(this, OfflineDashboardActivity::class.java))
             }
             "forgetwifi" -> forgetLibraryWifi()
             "getdeviceid" -> handleGetDeviceId(data.getQueryParameter("callback"))
@@ -334,7 +348,7 @@ class MainActivity : AppCompatActivity() {
     // ── Wi-Fi helpers ──────────────────────────────────────────────────────
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun connectToLibraryWifi(ssid: String, pass: String) {
+    private fun connectToLibraryWifi(ssid: String, pass: String, ssid2: String = "", pass2: String = "") {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Location permission was revoked. Please allow it in Settings.",
@@ -343,46 +357,35 @@ class MainActivity : AppCompatActivity() {
                 PERMISSION_REQUEST_CODE)
             return
         }
-        val suggestion = WifiNetworkSuggestion.Builder()
-            .setSsid(ssid)
-            .setWpa2Passphrase(pass)
-            .setIsAppInteractionRequired(true)
-            .setPriority(999)
-            .build()
+
+        val suggestions = mutableListOf<WifiNetworkSuggestion>()
+        suggestions.add(
+            WifiNetworkSuggestion.Builder()
+                .setSsid(ssid).setWpa2Passphrase(pass)
+                .setIsAppInteractionRequired(true).setPriority(999).build()
+        )
+        if (ssid2.isNotBlank() && pass2.isNotBlank()) {
+            suggestions.add(
+                WifiNetworkSuggestion.Builder()
+                    .setSsid(ssid2).setWpa2Passphrase(pass2)
+                    .setIsAppInteractionRequired(true).setPriority(998).build()
+            )
+        }
 
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-
-        wifiManager.disconnect()
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-
-        val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
-
-        if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
-            Toast.makeText(
-                this,
-                "Connecting to Library Wi-Fi…\nYou will be connected shortly.",
-                Toast.LENGTH_LONG
-            ).show()
-        } else {
-            Toast.makeText(
-                this,
-                "Could not connect. Please check Wi-Fi settings.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-        // NOTE: openInCustomTab intentionally removed here.
-        // Launching a new Activity immediately after addNetworkSuggestions
-        // pushes MainActivity to the background before Android can show the
-        // "Allow suggested Wi-Fi?" consent dialog, causing the popup to never
-        // appear and the suggestion to be silently ignored.
+        wifiManager.addNetworkSuggestions(suggestions)
+        // NOTE: no toast here — Offline Dashboard handles the UI
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun forgetLibraryWifi() {
+        // Delete all saved user files
+        UserDataManager.deleteAll(this)
+        // Remove wifi suggestions
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
         Toast.makeText(this, "Disconnected from Library Wi-Fi.\nMembership ended.",
             Toast.LENGTH_LONG).show()
-        // openInCustomTab intentionally not called here — let the caller's page handle navigation.
     }
 }
