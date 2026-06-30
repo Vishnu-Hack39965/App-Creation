@@ -42,9 +42,13 @@ class OfflineDashboardActivity : AppCompatActivity() {
         val tvFather      = findViewById<TextView>(R.id.tvFather)
         val tvPhone       = findViewById<TextView>(R.id.tvPhone)
         val tvAddress     = findViewById<TextView>(R.id.tvAddress)
-        val wifiResult    = findViewById<LinearLayout>(R.id.layoutWifiResult)
-        val tvWifiResult  = findViewById<TextView>(R.id.tvWifiResult)
-        val tvWifiSub     = findViewById<TextView>(R.id.tvWifiSubtext)
+        // Two SEPARATE result blocks — one under each button
+        val wifiResult1   = findViewById<LinearLayout>(R.id.layoutWifiResult1)
+        val tvWifiResult1 = findViewById<TextView>(R.id.tvWifiResult1)
+        val tvWifiSub1    = findViewById<TextView>(R.id.tvWifiSubtext1)
+        val wifiResult2   = findViewById<LinearLayout>(R.id.layoutWifiResult2)
+        val tvWifiResult2 = findViewById<TextView>(R.id.tvWifiResult2)
+        val tvWifiSub2    = findViewById<TextView>(R.id.tvWifiSubtext2)
         val btnBack       = findViewById<Button>(R.id.btnBackToMain)
 
         // ── SAMPLE DATA BUTTON (testing) ──────────────────────────────────
@@ -115,8 +119,13 @@ class OfflineDashboardActivity : AppCompatActivity() {
         val wifiClickListener = View.OnClickListener { view ->
             val isWifi2 = (view.id == R.id.btnWifi2)
 
+            // Pick the correct result block based on which button was pressed
+            val resultLayout = if (isWifi2) wifiResult2 else wifiResult1
+            val tvMain        = if (isWifi2) tvWifiResult2 else tvWifiResult1
+            val tvSub         = if (isWifi2) tvWifiSub2 else tvWifiSub1
+
             if (currentSurvivalDays < -1.0) {
-                showWifiResult(wifiResult, tvWifiResult, tvWifiSub,
+                showWifiResult(resultLayout, tvMain, tvSub,
                     isError = true,
                     main    = "⚠️ Please, Pay your fees first",
                     sub     = "Your membership has expired. Visit the Home Page to renew.")
@@ -124,10 +133,20 @@ class OfflineDashboardActivity : AppCompatActivity() {
             }
 
             if (isLibraryClosed()) {
-                showWifiResult(wifiResult, tvWifiResult, tvWifiSub,
+                showWifiResult(resultLayout, tvMain, tvSub,
                     isError = true,
                     main    = "🔒 Library Closed",
                     sub     = "Library is closed during 6:00–7:00 AM and 6:00–6:30 PM.")
+                return@OnClickListener
+            }
+
+            // NEW: check if the device's own hotspot is currently turned on.
+            // If it is, block the connect attempt and ask user to turn it off.
+            if (isHotspotEnabled()) {
+                showWifiResult(resultLayout, tvMain, tvSub,
+                    isError = true,
+                    main    = "📵 Please turn off hotspot first",
+                    sub     = "Your mobile hotspot is currently ON. Turn it off, then try connecting again.")
                 return@OnClickListener
             }
 
@@ -137,13 +156,13 @@ class OfflineDashboardActivity : AppCompatActivity() {
                 val ssid = if (isWifi2) wd?.get("ssid2") ?: "" else wd?.get("ssid") ?: ""
                 val pass = if (isWifi2) wd?.get("pass2") ?: "" else wd?.get("pass") ?: ""
                 if (ssid.isBlank() || pass.isBlank()) {
-                    showWifiResult(wifiResult, tvWifiResult, tvWifiSub,
+                    showWifiResult(resultLayout, tvMain, tvSub,
                         isError = true,
                         main    = "❌ Wi-Fi data missing",
                         sub     = "Please visit Home Page to refresh your data.")
                     return@OnClickListener
                 }
-                connectWifi(ssid, pass, wifiResult, tvWifiResult, tvWifiSub)
+                connectWifi(ssid, pass, resultLayout, tvMain, tvSub)
             }
         }
 
@@ -199,6 +218,25 @@ class OfflineDashboardActivity : AppCompatActivity() {
         // 6:00 AM – 7:00 AM  → 360..419
         // 6:00 PM – 6:30 PM  → 1080..1109
         return totalMin in 360..419 || totalMin in 1080..1109
+    }
+
+    // ── Hotspot check ────────────────────────────────────────────────────
+    // WifiManager.isWifiApEnabled() is a hidden/internal API (no public
+    // method exists), so it's accessed via reflection. This is the same
+    // approach used system-wide by apps that need to detect hotspot state.
+    private fun isHotspotEnabled(): Boolean {
+        return try {
+            val wifiManager = applicationContext
+                .getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val method = wifiManager.javaClass.getMethod("isWifiApEnabled")
+            method.isAccessible = true
+            method.invoke(wifiManager) as? Boolean ?: false
+        } catch (e: Exception) {
+            // If reflection fails on a particular OEM/Android version,
+            // fail safe by assuming hotspot is OFF so the app doesn't
+            // permanently block connecting.
+            false
+        }
     }
 
     // ── Wi-Fi connect ─────────────────────────────────────────────────────
