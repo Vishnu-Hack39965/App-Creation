@@ -9,7 +9,6 @@ import android.content.pm.PackageManager
 import android.media.MediaDrm
 import android.net.Uri
 import android.net.wifi.WifiManager
-import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -337,9 +336,9 @@ class MainActivity : AppCompatActivity() {
                     survivalDays = survivalDays
                 )
 
-                if (ssid.isNotBlank() && pass.isNotBlank()) {
-                    connectToLibraryWifi(ssid, pass, ssid2, pass2)
-                }
+                // REMOVED: no longer auto-creates a Wi-Fi suggestion here.
+                // The suggestion is now made ONLY when the user manually taps
+                // a "Connect to <ssid>" button on the Offline Dashboard page.
 
                 // Open Offline Dashboard immediately after saving data
                 startActivity(Intent(this, OfflineDashboardActivity::class.java))
@@ -371,34 +370,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Wi-Fi helpers ──────────────────────────────────────────────────────
+    // ── Wi-Fi connect logic moved entirely to OfflineDashboardActivity.
+    //    MainActivity no longer creates Wi-Fi suggestions on its own —
+    //    only the user's explicit "Connect to <ssid>" tap does that.
 
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun connectToLibraryWifi(ssid: String, pass: String, ssid2: String = "", pass2: String = "") {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Location permission was revoked. Please allow it in Settings.",
-                Toast.LENGTH_LONG).show()
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), PERMISSION_REQUEST_CODE)
-            return
-        }
-        val suggestions = mutableListOf(
-            WifiNetworkSuggestion.Builder()
-                .setSsid(ssid).setWpa2Passphrase(pass)
-                .setIsAppInteractionRequired(true).setPriority(999).build()
-        )
-        if (ssid2.isNotBlank() && pass2.isNotBlank()) {
-            suggestions.add(
-                WifiNetworkSuggestion.Builder()
-                    .setSsid(ssid2).setWpa2Passphrase(pass2)
-                    .setIsAppInteractionRequired(true).setPriority(998).build()
-            )
-        }
-        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wm.removeNetworkSuggestions(wm.networkSuggestions)
-        wm.addNetworkSuggestions(suggestions)
-        // Offline Dashboard shows the result UI — no Toast needed here
-    }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun forgetLibraryWifi() {
