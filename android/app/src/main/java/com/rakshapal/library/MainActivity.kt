@@ -50,6 +50,9 @@ class MainActivity : AppCompatActivity() {
         // FIX (d): watch for APK landing on disk — show dialog immediately
         startApkFileWatcher(this)
 
+        // Listen for hotspot turning ON — instantly removes our Wi-Fi suggestions
+        HotspotStateReceiver.register(this)
+
         runEntranceAnimations()
 
         // ── Button wiring ──────────────────────────────────────────────────
@@ -272,6 +275,14 @@ class MainActivity : AppCompatActivity() {
             Log.d(UpdateConfig.TAG, "Newer version $latestVersion found — downloading…")
             val success = downloadApkSilently(this@MainActivity)
             if (success) {
+                // Mark as ready, same as the background UpdateWorker does,
+                // so the dialog persists across restarts even if user
+                // closes the app before tapping Install.
+                prefs.edit()
+                    .putBoolean(UpdateConfig.KEY_READY, true)
+                    .putString(UpdateConfig.KEY_VERSION, latestVersion)
+                    .apply()
+
                 // FIX (e): bring to front so dialog is visible
                 closeCctAndBringToFront()
                 delay(700)
@@ -292,6 +303,7 @@ class MainActivity : AppCompatActivity() {
         floatAnimator?.cancel()
         updateScope.cancel()
         stopApkFileWatcher()
+        HotspotStateReceiver.unregister(this)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
