@@ -83,9 +83,12 @@ class MainActivity : AppCompatActivity() {
     // ── FIX (b): keep asking until location is granted, never open without it ──
 
     private fun ensureLocationPermissionThenOpen() {
+        // CHANGED: no longer auto-opens the home page (CCT) on launch.
+        // Permission is still requested up-front since Wi-Fi connect needs it,
+        // but the user must tap "GO TO HOME PAGE" themselves to open the CCT.
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED) {
-            openHomePage()
+            // Permission already granted — do nothing, stay on Main screen.
         } else {
             // Show a Toast explaining why, then request again
             Toast.makeText(
@@ -108,8 +111,14 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Granted — proceed to open home
-                openHomePage()
+                // CHANGED: no longer auto-opens the CCT after permission is granted.
+                // Stay on the 3-button Main screen; user opens home page manually
+                // by tapping "GO TO HOME PAGE".
+                Toast.makeText(
+                    this,
+                    "✅ Permission granted. You're all set!",
+                    Toast.LENGTH_SHORT
+                ).show()
             } else {
                 // FIX (b): denied — show reason and ask AGAIN immediately (loop)
                 Toast.makeText(
