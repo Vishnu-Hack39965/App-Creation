@@ -42,265 +42,197 @@ jobs:
           PKG="com.rakshapal.library"
           MAIN="com.rakshapal.library/.MainActivity"
           DELAY=7
+          STEP=0
 
           mkdir -p screenshots
 
-          # ── Download APK ──────────────────────────────────────────────────
+          # ════════════════════════════════════════════════════════════════
+          # HELPER: tap_text "<text to find>" [optional_timeout_seconds]
+          #
+          #   1. Dumps current UI hierarchy via uiautomator
+          #   2. Searches for an element whose text OR content-desc CONTAINS
+          #      the given string (case-sensitive substring match)
+          #   3. Calculates the centre of its bounds
+          #   4. Echoes the coordinates found
+          #   5. Taps that centre point
+          #
+          #   Returns 0 if found+tapped, 1 if not found (caller can decide
+          #   whether that's fatal or just "skip, wasn't needed this run")
+          # ════════════════════════════════════════════════════════════════
+          tap_text() {
+            local SEARCH="$1"
+            local RETRIES="${2:-3}"
+            local TRY=1
+
+            while [ $TRY -le $RETRIES ]; do
+              adb shell uiautomator dump /data/local/tmp/window_dump.xml > /dev/null 2>&1
+              adb pull /data/local/tmp/window_dump.xml ./window_dump.xml > /dev/null 2>&1
+
+              # Match either text="...SEARCH..." or content-desc="...SEARCH..."
+              # on the SAME xml node, then grab that node's bounds
+              COORDS=$(grep -oP '<node[^>]*(text|content-desc)="[^"]*'"$SEARCH"'[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' window_dump.xml \
+                        | grep -oP 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' \
+                        | sed 's/bounds="//; s/"//' \
+                        | head -n 1)
+
+              rm -f window_dump.xml
+
+              if [ -n "$COORDS" ]; then
+                X1=$(echo "$COORDS" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1/')
+                Y1=$(echo "$COORDS" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\2/')
+                X2=$(echo "$COORDS" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\3/')
+                Y2=$(echo "$COORDS" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\4/')
+                CX=$(( (X1 + X2) / 2 ))
+                CY=$(( (Y1 + Y2) / 2 ))
+                echo "  🎯 Found \"$SEARCH\" at bounds=$COORDS -> tapping ($CX, $CY)"
+                adb shell input tap "$CX" "$CY"
+                sleep 2
+                return 0
+              fi
+
+              echo "  ⏳ \"$SEARCH\" not found (try $TRY/$RETRIES), waiting..."
+              sleep 2
+              TRY=$((TRY+1))
+            done
+
+            echo "  ❌ \"$SEARCH\" NOT FOUND after $RETRIES tries — skipping this tap"
+            return 1
+          }
+
+          # ════════════════════════════════════════════════════════════════
+          # HELPER: shot "<filename_without_ext>"  — numbered screenshot
+          # ════════════════════════════════════════════════════════════════
+          shot() {
+            STEP=$((STEP+1))
+            local NAME=$(printf "%02d_%s" "$STEP" "$1")
+            adb exec-out screencap -p > "screenshots/${NAME}.png"
+            echo "  📸 Saved screenshots/${NAME}.png"
+          }
+
+          # ── Download APK ────────────────────────────────────────────────
           echo ">>> Downloading APK..."
           curl -L \
             "https://github.com/Vishnu-Hack39965/App-Creation/releases/download/v1.0.63/app-debug.apk" \
             -o /tmp/app-debug.apk
           echo "APK size: $(du -sh /tmp/app-debug.apk)"
 
-          # ── Install ───────────────────────────────────────────────────────
           echo ">>> Installing APK"
           adb install -r /tmp/app-debug.apk
 
-          # ── Grant permissions ─────────────────────────────────────────────
           adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
           adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
-
-          # ── Unlock screen ─────────────────────────────────────────────────
-          adb shell input keyevent 82
-          sleep 2
-
-          # ── Pre-warm Chrome to dismiss its welcome dialog ─────────────────
-          echo ">>> Pre-warming Chrome..."
-          adb shell am start -a android.intent.action.VIEW \
-            -d "https://example.com" \
-            -n "com.android.chrome/com.google.android.apps.chrome.Main" \
-            2>/dev/null || true
-          sleep 7
-          # Tap "Accept & Continue" (centre-bottom of screen ~y=1800)
-          adb shell input tap 540 1800 || true
-          sleep 2
-          # Tap "No thanks" on sign-in prompt (~y=1600)
-          adb shell input tap 540 1600 || true
-          sleep 2
-          # Close Chrome
-          adb shell input keyevent KEYCODE_BACK
-          sleep 1
-          adb shell input keyevent KEYCODE_BACK
-          sleep 2
-          echo "Chrome pre-warmed"
-
-          # ── Revoke location so app doesn't auto-open CCT ──────────────────
+          # Revoke right away — we want the app's own permission flow visible
           adb shell pm revoke "$PKG" android.permission.ACCESS_FINE_LOCATION   2>/dev/null || true
           adb shell pm revoke "$PKG" android.permission.ACCESS_COARSE_LOCATION 2>/dev/null || true
 
-          # ── Start recording ───────────────────────────────────────────────
-          echo ">>> Starting recording"
+          adb shell input keyevent 82
+          sleep 2
+
+          echo ">>> Starting screen recording"
           adb shell screenrecord --time-limit 170 /sdcard/demo.mp4 &
           RECORD_PID=$!
           sleep 2
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 1 — Main screen
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 1: Main Screen ==="
+          # ════════════════════════════════════════════════════════════════
+          # PHOTO: Main screen (first launch)
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Launching app: Main Screen ==="
           adb shell am start -n "$MAIN"
           sleep $DELAY
-          # Dismiss permission dialog with Back so we stay on main screen
-          adb shell input keyevent KEYCODE_BACK 2>/dev/null || true
-          sleep 2
-          adb exec-out screencap -p > screenshots/01_main_screen.png
-          echo "✓ Photo 1"
+          shot "main_screen"
 
-          # ──────────────────────────────────────────────────────────────────
-          # REAL BUTTON COORDINATES from Photo 1 (1080x2280 screen):
-          #   Offline Dashboard btn  centre → x=370, y=785
-          #   Go to Home Page btn    centre → x=370, y=915
-          #   Exit App btn           centre → x=370, y=1043
-          # ──────────────────────────────────────────────────────────────────
-        
-        
-          echo "=== Accepting Location Permission via UI Automator ==="
-
-          # 1. Dump the current screen UI hierarchy to an XML file on the device
-          adb shell uiautomator dump /data/local/tmp/window_dump.xml > /dev/null
-
-          # 2. Pull the XML file to your computer to parse it
-          adb pull /data/local/tmp/window_dump.xml ./window_dump.xml > /dev/null
-
-          # 3. Parse the XML to find the button bounds and calculate the center X and Y
-          COORDS=$(grep -oP 'text="([^"]*(Only this time)[^"]*)"[^>]*bounds="\[\d+,\d+\]\[\d+,\d+\]"' window_dump.xml | grep -oP 'bounds="\[\d+,\d+\]\[\d+,\d+\]"' | sed 's/bounds="//; s/"//' | head -n 1)
-
-          if [ -z "$COORDS" ]; then
-              echo "❌ Permission button text not found in UI dump!"
-          else
-              # Extract x1, y1, x2, y2 from format [x1,y1][x2,y2]
-              X1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1/')
-              Y1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\2/')
-              X2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\3/')
-              Y2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\4/')
-
-              # Calculate the exact center point
-              CX=$(( (X1 + X2) / 2 ))
-              CY=$(( (Y1 + Y2) / 2 ))
-
-             echo "🎯 Found button center at X:$CX, Y:$CY"
-    
-              # 4. Tap the calculated center point
-              adb shell input tap $CX $CY
-          fi
-
-          # Clean up local file
-          rm -f window_dump.xml
-          sleep 2
-
-
-          echo "=== Finding the coordinates of Accept & continue ==="
-
-          # 1. Dump the current screen UI hierarchy to an XML file on the device
-          adb shell uiautomator dump /data/local/tmp/window_dump.xml > /dev/null
-
-          # 2. Pull the XML file to your computer to parse it
-          adb pull /data/local/tmp/window_dump.xml ./window_dump.xml > /dev/null
-
-          # 3. Parse the XML to find the button bounds and calculate the center X and Y
-          COORDS=$(grep -oP 'text="([^"]*(Accept & continue)[^"]*)"[^>]*bounds="\[\d+,\d+\]\[\d+,\d+\]"' window_dump.xml | grep -oP 'bounds="\[\d+,\d+\]\[\d+,\d+\]"' | sed 's/bounds="//; s/"//' | head -n 1)
-
-          if [ -z "$COORDS" ]; then
-              echo "❌ Permission button text not found in UI dump!"
-          else
-              # Extract x1, y1, x2, y2 from format [x1,y1][x2,y2]
-              X1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1/')
-              Y1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\2/')
-              X2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\3/')
-              Y2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\4/')
-
-              # Calculate the exact center point
-              CX=$(( (X1 + X2) / 2 ))
-              CY=$(( (Y1 + Y2) / 2 ))
-
-             echo "🎯 Found button center at X:$CX, Y:$CY"
-    
-              # 4. Tap the calculated center point
-              adb shell input tap $CX $CY
-          fi
-
-          # Clean up local file
-          rm -f window_dump.xml
-          sleep 2
-
-
-
-          echo "=== Finding the coordinates of No Thanks ==="
-
-          # 1. Dump the current screen UI hierarchy to an XML file on the device
-          adb shell uiautomator dump /data/local/tmp/window_dump.xml > /dev/null
-
-          # 2. Pull the XML file to your computer to parse it
-          adb pull /data/local/tmp/window_dump.xml ./window_dump.xml > /dev/null
-
-          # 3. Parse the XML to find the button bounds and calculate the center X and Y
-          COORDS=$(grep -oP 'text="([^"]*(No Thanks)[^"]*)"[^>]*bounds="\[\d+,\d+\]\[\d+,\d+\]"' window_dump.xml | grep -oP 'bounds="\[\d+,\d+\]\[\d+,\d+\]"' | sed 's/bounds="//; s/"//' | head -n 1)
-
-          if [ -z "$COORDS" ]; then
-              echo "❌ Permission button text not found in UI dump!"
-          else
-              # Extract x1, y1, x2, y2 from format [x1,y1][x2,y2]
-              X1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1/')
-              Y1=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\2/')
-              X2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\3/')
-              Y2=$(echo $COORDS | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\4/')
-
-              # Calculate the exact center point
-              CX=$(( (X1 + X2) / 2 ))
-              CY=$(( (Y1 + Y2) / 2 ))
-
-             echo "🎯 Found button center at X:$CX, Y:$CY"
-    
-              # 4. Tap the calculated center point
-              adb shell input tap $CX $CY
-          fi
-
-          # Clean up local file
-          rm -f window_dump.xml
-          sleep 2
-
-
-
-
-
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 2 — Offline Dashboard: no data
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 2: Dashboard no data ==="
-          adb shell input tap 370 785
+          # ════════════════════════════════════════════════════════════════
+          # Handle Android system location permission dialog
+          # Look for "Only this time" / "While using the app" / "Allow"
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Handling location permission dialog ==="
+          tap_text "Only this time" 3 || tap_text "While using the app" 2 || tap_text "Allow" 2
           sleep $DELAY
-          adb exec-out screencap -p > screenshots/02_dashboard_no_data.png
-          echo "✓ Photo 2"
 
-          # ══════════════════════════════════════════════════════════════════
-          # Load sample data — tap the "Load Sample Data" button.
-          # On no-data screen it appears near bottom. Take debug shot first.
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== Loading sample data ==="
-          adb exec-out screencap -p > screenshots/02b_debug_before_sample.png
-          # Scroll down to expose sample button
-          adb shell input swipe 370 1200 370 800 300
-          sleep 1
-          adb exec-out screencap -p > screenshots/02c_debug_after_scroll.png
-          # Tap sample button (mid-screen after scroll ~y=1100)
-          adb shell input tap 370 1100
+          # ════════════════════════════════════════════════════════════════
+          # The app should now auto-open Chrome Custom Tab (home page).
+          # Handle Chrome's first-run dialogs.
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Handling Chrome welcome dialog ==="
+          tap_text "Accept & continue" 4
+          sleep 3
+          shot "chrome_after_accept"
+
+          echo "=== Handling Chrome sign-in dialog ==="
+          tap_text "No thanks" 3
+          sleep 3
+          shot "chrome_home_page"
+
+          # ════════════════════════════════════════════════════════════════
+          # Go back to the app
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Returning to app ==="
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+          adb shell am start -n "$MAIN"
+          sleep $DELAY
+          shot "main_screen_again"
+
+          # ════════════════════════════════════════════════════════════════
+          # Tap "OFFLINE DASHBOARD" button by text search
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Opening Offline Dashboard ==="
+          tap_text "OFFLINE DASHBOARD" 3
+          sleep $DELAY
+          shot "dashboard_no_data"
+
+          # ════════════════════════════════════════════════════════════════
+          # Tap "Load Sample Data" / "Temporary Data" test button
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Loading sample/test data ==="
+          tap_text "Sample Data" 2 || tap_text "Temporary Data" 2 || tap_text "Test" 2
           sleep 5
-          adb exec-out screencap -p > screenshots/02d_after_sample_load.png
-          echo "Sample data loaded"
+          shot "dashboard_after_sample_tap"
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 3 — Dashboard top with data
-          # Scroll back to top
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 3: Dashboard with data (top) ==="
-          adb shell input swipe 370 600 370 1400 400
+          # ════════════════════════════════════════════════════════════════
+          # Scroll to top to show full dashboard (name, timer, etc.)
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Scrolling to dashboard top ==="
+          adb shell input swipe 540 600 540 1600 400
           sleep 2
-          adb exec-out screencap -p > screenshots/03_dashboard_data_top.png
-          echo "✓ Photo 3"
+          shot "dashboard_top_with_data"
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 4 — Dashboard scrolled: WiFi buttons
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 4: Dashboard WiFi buttons ==="
-          adb shell input swipe 370 1400 370 400 500
+          # ════════════════════════════════════════════════════════════════
+          # Scroll down to reveal WiFi connect buttons
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Scrolling to WiFi buttons ==="
+          adb shell input swipe 540 1600 540 500 500
           sleep 2
-          adb exec-out screencap -p > screenshots/04_dashboard_wifi_buttons.png
-          echo "✓ Photo 4"
+          shot "dashboard_wifi_buttons"
 
-          # Re-grant location for WiFi connect
+          # Re-grant location so the WiFi-connect flow actually works
           adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION 2>/dev/null || true
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 5 — After tapping WiFi 1 connect button
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 5: After WiFi connect ==="
-          # Take debug shot to see exact button positions after scroll
-          adb exec-out screencap -p > screenshots/04b_debug_wifi_positions.png
-          adb shell input tap 370 900
+          # ════════════════════════════════════════════════════════════════
+          # Tap "Connect to" WiFi button by text search
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Tapping WiFi connect button ==="
+          tap_text "Connect to" 3
           sleep 4
-          adb exec-out screencap -p > screenshots/05_after_wifi_connect.png
-          echo "✓ Photo 5"
+          shot "after_wifi_connect"
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 6 — Back to Main screen
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 6: Main after Dashboard ==="
+          # ════════════════════════════════════════════════════════════════
+          # Go back to Main screen
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Returning to Main screen ==="
           adb shell input keyevent KEYCODE_BACK
           sleep 4
-          adb exec-out screencap -p > screenshots/06_main_after_dashboard.png
-          echo "✓ Photo 6"
+          shot "main_after_dashboard"
 
-          # ══════════════════════════════════════════════════════════════════
-          # PHOTO 7 — Tap Go to Home Page
-          # From Photo 1: btnHome centre is x=370, y=915
-          # ══════════════════════════════════════════════════════════════════
-          echo "=== PHOTO 7: Home Page (CCT) ==="
-          adb shell input tap 370 915
+          # ════════════════════════════════════════════════════════════════
+          # Tap "GO TO HOME PAGE" button by text search
+          # ════════════════════════════════════════════════════════════════
+          echo "=== Tapping Go To Home Page ==="
+          tap_text "GO TO HOME PAGE" 3
           sleep 8
-          adb exec-out screencap -p > screenshots/07_home_page_cct.png
-          echo "✓ Photo 7"
+          shot "home_page_cct_final"
 
-          # ── Pull video ────────────────────────────────────────────────────
+          # ── Pull video ──────────────────────────────────────────────────
           echo "=== Pulling video ==="
           kill $RECORD_PID 2>/dev/null || true
           adb shell pkill -2 screenrecord 2>/dev/null || true
