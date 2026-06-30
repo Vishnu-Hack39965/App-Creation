@@ -1,6 +1,7 @@
 package com.rakshapal.library
 
 import android.content.Context
+import android.net.wifi.WifiManager
 import android.util.Base64
 import android.util.Log
 import java.io.File
@@ -117,6 +118,26 @@ object UserDataManager {
             val newRaw = "$newRemaining|$nowMillis"
             f.writeText(encode(newRaw))
             Log.d(TAG, "Survival updated: was=$savedRemaining elapsed=$elapsedDays new=$newRemaining")
+
+            // NEW: if survival time has dropped below -1, wipe only the
+            // saved Wi-Fi credentials (ssid/pass/ssid2/pass2). user_data.txt
+            // and survival.txt are left untouched.
+            if (newRemaining < -1.0) {
+                val wifiFile = getFile(context, FILE_WIFI)
+                if (wifiFile.exists()) {
+                    wifiFile.delete()
+                    Log.d(TAG, "Survival < -1 ($newRemaining) — wifi_data.txt deleted.")
+                }
+                try {
+                    val wm = context.applicationContext
+                        .getSystemService(Context.WIFI_SERVICE) as WifiManager
+                    wm.removeNetworkSuggestions(wm.networkSuggestions)
+                    Log.d(TAG, "Survival < -1 — Wi-Fi network suggestions removed.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to remove Wi-Fi suggestions: ${e.message}")
+                }
+            }
+
             newRemaining
         } catch (e: Exception) {
             Log.e(TAG, "Survival read error: ${e.message}")
