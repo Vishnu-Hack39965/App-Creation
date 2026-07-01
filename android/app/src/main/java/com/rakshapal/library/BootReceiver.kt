@@ -25,13 +25,17 @@ class BootReceiver : BroadcastReceiver() {
         runCatchingLogged("schedulePeriodicCheck (auto-update, every 15min)") {
             schedulePeriodicCheck(context)
         }
-        runCatchingLogged("scheduleWifiAlarms (exact 6am/6pm alarms)") {
-            scheduleWifiAlarms(context)
+        runCatchingLogged("ensureWifiAlarmsScheduled (daily-repeating 6am/6pm alarms)") {
+            // AlarmManager alarms (including repeating ones) don't survive
+            // reboot — this checks whether they're still armed and, if
+            // revoked, re-arms them with the same daily-repeat schedule.
+            ensureWifiAlarmsScheduled(context)
         }
-        runCatchingLogged("rescheduleExpiryAlarmsIfNeeded (survival expiry 3-shot alarms)") {
-            // AlarmManager alarms don't survive reboot — re-arm whichever of
-            // the 3 expiry alarms haven't already passed.
-            rescheduleExpiryAlarmsIfNeeded(context)
+        runCatchingLogged("verifyAndRepairExpiryAlarms (survival expiry 3-shot alarms)") {
+            // AlarmManager alarms don't survive reboot — recalculate the
+            // canonical expiry moment from source data and re-arm whichever
+            // of the 3 expiry alarms are missing/mismatched.
+            verifyAndRepairExpiryAlarms(context)
         }
 
         // NOTE: SurvivalUpdateWorker is deliberately NOT rescheduled here —
