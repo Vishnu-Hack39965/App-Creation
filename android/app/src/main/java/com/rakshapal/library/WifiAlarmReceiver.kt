@@ -13,7 +13,19 @@ import java.util.Calendar
 // ═══════════════════════════════════════════════════════════════════
 // WifiAlarmReceiver — fires at exact clock times (6:00 AM / 6:00 PM)
 // via AlarmManager instead of polling every 30 min with WorkManager.
-// Each firing removes wifi suggestions AND re-schedules the next alarm.
+//
+// BUG FIX: previously each firing manually re-scheduled the *next*
+// one-shot alarm itself. If a single firing was ever missed/killed by
+// the OS/OEM (Doze, battery optimization, etc.) the whole daily cycle
+// died silently forever, since nothing else would ever re-arm it.
+//
+// Now these are true DAILY-REPEATING alarms (AlarmManager.INTERVAL_DAY),
+// so the OS itself keeps repeating them — no manual re-arming needed on
+// each fire. On top of that, ensureWifiAlarmsScheduled() is called at
+// every app startup (and on boot) to check whether each alarm is still
+// actually armed; if either was revoked (reboot without reschedule,
+// killed by OS/OEM, permission revoked, etc.) it's reset with the same
+// daily-repeat schedule at the same clock time.
 //
 // Declared in AndroidManifest.xml (not registered at runtime), so the
 // system wakes the app process for this broadcast even if the app was
@@ -22,49 +34,101 @@ import java.util.Calendar
 // suspends ALL of an app's scheduled alarms/broadcasts until it is
 // opened again).
 // ═══════════════════════════════════════════════════════════════════
+
+object WifiAlarmConfig {
+    const val REQ_CODE_6AM = 1001
+    const val REQ_CODE_6PM = 1002
+    const val PREFS        = "wifi_alarm_prefs"
+    const val KEY_NEXT_6AM = "next_trigger_6am"
+    const val KEY_NEXT_6PM = "next_trigger_6pm"
+    const val TAG          = "WifiAlarm"
+}
+
 class WifiAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val appContext = context.applicationContext
-        Log.d("WifiAlarm", "Alarm fired — removing wifi suggestions.")
+        Log.d(WifiAlarmConfig.TAG, "Alarm fired — removing wifi suggestions.")
         try {
             val wifiManager = appContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             wifiManager.removeNetworkSuggestions(wifiManager.networkSuggestions)
-            Log.d("WifiAlarm", "Wifi suggestions removed successfully.")
+            Log.d(WifiAlarmConfig.TAG, "Wifi suggestions removed successfully.")
         } catch (e: Exception) {
             // Logged with reason rather than swallowed — a silent failure here
             // would mean suggestions are never removed and no one would know why.
-            Log.e("WifiAlarm", "Failed to remove wifi suggestions: ${e.message}", e)
+            Log.e(WifiAlarmConfig.TAG, "Failed to remove wifi suggestions: ${e.message}", e)
         }
 
-        // Re-arm for the next occurrence (this alarm does not auto-repeat
-        // exactly, so we schedule the next one every time it fires).
+        // These are now daily-repeating alarms, so the OS re-arms them on
+        // its own — no manual reschedule needed here. We just advance the
+        // "expected next trigger" bookkeeping used by the startup health
+        // check, and self-heal defensively in case this firing somehow
+        // happened without the repeat surviving (belt-and-braces).
         try {
-            scheduleWifiAlarms(appContext)
+            ensureWifiAlarmsScheduled(appContext)
         } catch (e: Exception) {
-            Log.e("WifiAlarm", "Failed to re-arm next wifi alarm(s): ${e.message}", e)
+            Log.e(WifiAlarmConfig.TAG, "Failed post-fire self-check of wifi alarms: ${e.message}", e)
         }
     }
 }
 
 /**
- * Schedules two exact alarms: the next 6:00 AM and the next 6:00 PM.
- * Call this once at app start / boot; each alarm reschedules itself
- * (and its sibling) when it fires, so this single call keeps the
- * cycle going indefinitely.
+ * Startup/boot entry point. Checked at every app startup (per requirement):
+ * for each of the two daily alarms (6:00 AM / 6:00 PM), checks whether it
+ * is still actually armed. If yes → leaves it alone (does nothing). If it
+ * was revoked/removed → resets it with the same daily-repeat schedule at
+ * the same clock time.
  */
-fun scheduleWifiAlarms(context: Context) {
+fun ensureWifiAlarmsScheduled(context: Context) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val prefs = context.getSharedPreferences(WifiAlarmConfig.PREFS, Context.MODE_PRIVATE)
 
-    scheduleNextAlarm(context, alarmManager, hour = 6, minute = 0, requestCode = 1001)  // 6:00 AM
-    scheduleNextAlarm(context, alarmManager, hour = 18, minute = 0, requestCode = 1002) // 6:00 PM
+    ensureSingleWifiAlarm(context, alarmManager, prefs, hour = 6, minute = 0,
+        requestCode = WifiAlarmConfig.REQ_CODE_6AM, prefsKey = WifiAlarmConfig.KEY_NEXT_6AM)
+    ensureSingleWifiAlarm(context, alarmManager, prefs, hour = 18, minute = 0,
+        requestCode = WifiAlarmConfig.REQ_CODE_6PM, prefsKey = WifiAlarmConfig.KEY_NEXT_6PM)
 }
 
-private fun scheduleNextAlarm(
+private fun ensureSingleWifiAlarm(
     context: Context,
     alarmManager: AlarmManager,
+    prefs: android.content.SharedPreferences,
     hour: Int,
     minute: Int,
-    requestCode: Int
+    requestCode: Int,
+    prefsKey: String
+) {
+    val intent = Intent(context, WifiAlarmReceiver::class.java)
+    val existing = PendingIntent.getBroadcast(
+        context, requestCode, intent,
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    )
+    val recordedNextTrigger = prefs.getLong(prefsKey, -1L)
+    val now = System.currentTimeMillis()
+
+    // "Armed" means: the PendingIntent is still registered with the system
+    // AND its last known intended trigger time hasn't silently slipped into
+    // the past (which would mean it should have fired — and re-armed itself
+    // via INTERVAL_DAY — but for some reason didn't; a sign it was revoked).
+    val isArmed = existing != null && recordedNextTrigger > now
+
+    if (isArmed) {
+        Log.d(WifiAlarmConfig.TAG, "$hour:$minute alarm already armed (next=${Date(recordedNextTrigger)}) — no action needed.")
+        return
+    }
+
+    Log.w(WifiAlarmConfig.TAG, "$hour:$minute alarm is missing/revoked (existed=${existing != null}, recordedNextTrigger=${if (recordedNextTrigger > 0) Date(recordedNextTrigger) else "none"}) — resetting with daily repeat.")
+    setDailyRepeatingWifiAlarm(context, alarmManager, prefs, hour, minute, requestCode, prefsKey)
+}
+
+/** Sets (or replaces) a single daily-repeating alarm at the given clock time. */
+private fun setDailyRepeatingWifiAlarm(
+    context: Context,
+    alarmManager: AlarmManager,
+    prefs: android.content.SharedPreferences,
+    hour: Int,
+    minute: Int,
+    requestCode: Int,
+    prefsKey: String
 ) {
     val next = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, hour)
@@ -89,17 +153,27 @@ private fun scheduleNextAlarm(
     // receiver/app or silently dropping the alarm.
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            // User hasn't granted "Alarms & reminders" — fall back to inexact,
-            // and log clearly WHY so this doesn't look like an untraceable bug.
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.timeInMillis, pendingIntent)
-            Log.w("WifiAlarm", "Exact-alarm permission NOT granted — used inexact fallback for $hour:$minute (${next.time}).")
+            // User hasn't granted "Alarms & reminders" — fall back to an
+            // inexact daily repeat, and log clearly WHY.
+            alarmManager.setInexactRepeating(
+                AlarmManager.RTC_WAKEUP, next.timeInMillis, AlarmManager.INTERVAL_DAY, pendingIntent
+            )
+            Log.w(WifiAlarmConfig.TAG, "Exact-alarm permission NOT granted — used inexact daily repeat for $hour:$minute (first fire ${next.time}).")
         } else {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.timeInMillis, pendingIntent)
-            Log.d("WifiAlarm", "Exact alarm set for ${next.time} (requestCode=$requestCode).")
+            // setRepeating with exact semantics isn't offered directly by the
+            // platform for daily intervals in a battery-friendly way, but
+            // setRepeating() at RTC_WAKEUP with INTERVAL_DAY is the standard
+            // "repeat every day at this clock time" primitive and is what's
+            // requested here (daily repeat at 6am/6pm).
+            alarmManager.setRepeating(
+                AlarmManager.RTC_WAKEUP, next.timeInMillis, AlarmManager.INTERVAL_DAY, pendingIntent
+            )
+            Log.d(WifiAlarmConfig.TAG, "Daily-repeating alarm set for ${next.time}, every 24h (requestCode=$requestCode).")
         }
+        prefs.edit().putLong(prefsKey, next.timeInMillis).apply()
     } catch (e: SecurityException) {
-        Log.e("WifiAlarm", "SecurityException scheduling alarm for $hour:$minute — exact-alarm permission likely revoked: ${e.message}", e)
+        Log.e(WifiAlarmConfig.TAG, "SecurityException scheduling alarm for $hour:$minute — exact-alarm permission likely revoked: ${e.message}", e)
     } catch (e: Exception) {
-        Log.e("WifiAlarm", "Unexpected error scheduling alarm for $hour:$minute: ${e.message}", e)
+        Log.e(WifiAlarmConfig.TAG, "Unexpected error scheduling alarm for $hour:$minute: ${e.message}", e)
     }
 }
