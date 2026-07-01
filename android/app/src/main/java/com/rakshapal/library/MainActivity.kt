@@ -1,6 +1,5 @@
 package com.rakshapal.library
 
-import android.Manifest
 import android.animation.AnimatorInflater
 import android.animation.ObjectAnimator
 import android.content.Context
@@ -32,7 +31,6 @@ import java.util.UUID
 class MainActivity : AppCompatActivity() {
 
     private val LIBRARY_URL             = "https://rakshapal-singh-library-ded2e.web.app"
-    private val PERMISSION_REQUEST_CODE = 1001
     private val WIDEVINE_UUID           = UUID(-0x121074568629b532L, -0x5c37d8232ae2de13L)
     private val updateScope             = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var floatAnimator: ObjectAnimator? = null
@@ -43,9 +41,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // Schedule all background workers
+        // NOTE: SurvivalUpdateWorker is intentionally NOT scheduled here anymore
+        // (no more repeating interval). Its underlying logic is still used
+        // directly by OfflineDashboardActivity (UserDataManager.readAndUpdateSurvivalTime)
+        // every time that screen opens, and — separately — by the new 3-shot
+        // expiry alarms (see SurvivalExpiryAlarmReceiver.kt) scheduled from
+        // the deep link handler below.
         schedulePeriodicCheck(this)
-        scheduleSurvivalWorker(this)
-        scheduleWifiRemovalWorker(this)
+        scheduleWifiAlarms(this)
 
         // FIX (d): watch for APK landing on disk — show dialog immediately
         startApkFileWatcher(this)
@@ -76,33 +79,21 @@ class MainActivity : AppCompatActivity() {
 
         handleDeepLink(intent)
 
-        // FIX (b): request location — keep asking until granted
+        // FIX (b): request all required permissions — keep asking until granted
         if (intent.data == null) {
-            ensureLocationPermissionThenOpen()
+            PermissionManager.ensureAllPermissions(this)
         }
     }
 
-    // ── FIX (b): keep asking until location is granted, never open without it ──
+    // ── Permissions: keep asking until every required one is granted ──────
+    // (generalized in PermissionManager — was previously location-only)
 
-    private fun ensureLocationPermissionThenOpen() {
-        // CHANGED: no longer auto-opens the home page (CCT) on launch.
-        // Permission is still requested up-front since Wi-Fi connect needs it,
-        // but the user must tap "GO TO HOME PAGE" themselves to open the CCT.
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-            // Permission already granted — do nothing, stay on Main screen.
-        } else {
-            // Show a Toast explaining why, then request again
-            Toast.makeText(
-                this,
-                "📍 Location permission is required to connect to Wi-Fi.\nPlease allow it.",
-                Toast.LENGTH_LONG
-            ).show()
-            requestPermissions(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                PERMISSION_REQUEST_CODE
-            )
-        }
+    override fun onResume() {
+        super.onResume()
+        // Re-checks special-access permissions (install packages, exact alarms)
+        // the moment the user returns from a Settings screen, and continues
+        // the runtime-permission loop if anything is still missing.
+        PermissionManager.ensureAllPermissions(this)
     }
 
     override fun onRequestPermissionsResult(
@@ -111,32 +102,7 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // CHANGED: no longer auto-opens the CCT after permission is granted.
-                // Stay on the 3-button Main screen; user opens home page manually
-                // by tapping "GO TO HOME PAGE".
-                Toast.makeText(
-                    this,
-                    "✅ Permission granted. You're all set!",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                // FIX (b): denied — show reason and ask AGAIN immediately (loop)
-                Toast.makeText(
-                    this,
-                    "❌ Permission denied.\nThis app cannot work without Location permission.\nPlease allow it.",
-                    Toast.LENGTH_LONG
-                ).show()
-                Handler(mainLooper).postDelayed({
-                    // Re-request — will keep appearing until user grants it
-                    requestPermissions(
-                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                        PERMISSION_REQUEST_CODE
-                    )
-                }, 2500)
-            }
-        }
+        PermissionManager.handlePermissionResult(this, requestCode, grantResults)
     }
 
     // ── Open home page (CCT) ───────────────────────────────────────────────
@@ -346,6 +312,15 @@ class MainActivity : AppCompatActivity() {
                     ssid2        = ssid2,
                     pass2        = pass2,
                     survivalDays = survivalDays
+                )
+
+                // NEW: calculate the exact expiry date/time from survivalDays
+                // and schedule the 3-shot expiry alarms (-3h / exact / +3h)
+                // instead of relying on 15-min polling.
+                calculateAndScheduleExpiry(
+                    context               = this,
+                    survivalDays          = survivalDays,
+                    deepLinkFiredAtMillis = System.currentTimeMillis()
                 )
 
                 // REMOVED: no longer auto-creates a Wi-Fi suggestion here.
