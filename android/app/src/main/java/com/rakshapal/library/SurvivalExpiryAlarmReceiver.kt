@@ -126,25 +126,105 @@ fun scheduleExpiryAlarms(context: Context, expireAtMillis: Long) {
 }
 
 /**
- * AlarmManager alarms are cleared on reboot. Call this from BootReceiver to
- * re-arm whichever of the 3 alarms haven't already passed, using the expiry
- * timestamp saved by calculateAndScheduleExpiry(). No-op if no deep link has
- * ever fired, or if the whole expiry window is already in the past.
+ * BUG FIX: the old rescheduleExpiryAlarmsIfNeeded() blindly trusted whatever
+ * expiry timestamp happened to be cached in SharedPreferences and blindly
+ * re-set all 3 alarms every time it ran (on every boot), even when nothing
+ * was actually wrong. That meant:
+ *   (a) if the cached timestamp had ever drifted out of sync with the real
+ *       source of truth (survival.txt) — e.g. partial write, manual data
+ *       edit, restore from an old backup — the alarms would silently keep
+ *       firing at the WRONG moment forever, since nothing ever re-derived
+ *       the correct value from source data.
+ *   (b) alarms got re-created unconditionally even when they were already
+ *       correctly scheduled, which is wasteful and can reset backoff/OEM
+ *       alarm quotas for no reason.
+ *
+ * This replacement:
+ *   1. RECALCULATES the canonical expiry moment fresh from survival.txt
+ *      (the actual source of truth) instead of trusting the cache.
+ *   2. Compares that recalculated value against what's cached — a mismatch
+ *      means the cache had drifted, so the cache is corrected.
+ *   3. Checks whether all 3 alarms (−3h / exact / +3h) are actually still
+ *      armed for that expiry moment (PendingIntent.FLAG_NO_CREATE — returns
+ *      null if the alarm isn't currently registered, e.g. cleared by a
+ *      reboot, cleared by the OS/OEM, or otherwise revoked).
+ *   4. If the recalculated expiry matches the cache AND all 3 alarms are
+ *      still armed → does nothing (this is the common, healthy case).
+ *      Otherwise (timestamp mismatch, or any alarm missing/removed) → all
+ *      3 alarms are (re)set against the freshly recalculated expiry time.
+ *
+ * Call this from BootReceiver AND from MainActivity.onCreate() (app
+ * startup), per requirements. No-op if no deep link has ever fired.
  */
-fun rescheduleExpiryAlarmsIfNeeded(context: Context) {
+fun verifyAndRepairExpiryAlarms(context: Context) {
     val prefs = context.getSharedPreferences(SurvivalExpiryConfig.PREFS, Context.MODE_PRIVATE)
-    val expireAtMillis = prefs.getLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, -1L)
-    if (expireAtMillis <= 0L) {
-        Log.d(SurvivalExpiryConfig.TAG, "No saved expiry timestamp — nothing to reschedule (deep link never fired).")
+
+    // 1) Recalculate the canonical expiry moment from source data.
+    //    Invariant: readAndUpdateSurvivalTime() always re-saves
+    //    (remaining - elapsedDays) alongside the current epoch, so
+    //    savedEpoch + (savedRemaining + 1) days is a FIXED POINT that
+    //    always reproduces the same original expiry instant, regardless
+    //    of when it's recalculated. This exactly mirrors the formula in
+    //    calculateAndScheduleExpiry().
+    val raw = UserDataManager.peekRawSurvival(context)
+    if (raw == null) {
+        Log.d(SurvivalExpiryConfig.TAG, "No survival data on disk — nothing to verify (deep link never fired, or data cleared).")
+        return
+    }
+    val (savedRemaining, savedEpoch) = raw
+    val recalculatedExpireAtMillis = savedEpoch +
+        ((savedRemaining + 1.0) * SurvivalExpiryConfig.ONE_DAY_MS).toLong()
+
+    val cachedExpireAtMillis = prefs.getLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, -1L)
+
+    val lastAlarmMillis = recalculatedExpireAtMillis + SurvivalExpiryConfig.THREE_HOURS_MS
+    if (lastAlarmMillis <= System.currentTimeMillis()) {
+        Log.d(SurvivalExpiryConfig.TAG, "Recalculated expiry window already fully passed — nothing to reschedule.")
         return
     }
 
-    val lastAlarmMillis = expireAtMillis + SurvivalExpiryConfig.THREE_HOURS_MS
-    if (lastAlarmMillis <= System.currentTimeMillis()) {
-        Log.d(SurvivalExpiryConfig.TAG, "Saved expiry window already fully passed — nothing to reschedule.")
+    // 2) Timestamp check: does the cache match the freshly recalculated value?
+    val timestampMatches = cachedExpireAtMillis == recalculatedExpireAtMillis
+    if (!timestampMatches) {
+        Log.w(
+            SurvivalExpiryConfig.TAG,
+            "Expiry timestamp MISMATCH — cached=${Date(cachedExpireAtMillis)} recalculated=${Date(recalculatedExpireAtMillis)}. Correcting cache."
+        )
+        prefs.edit().putLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, recalculatedExpireAtMillis).apply()
+    }
+
+    // 3) Alarm-presence check: are all 3 alarms still actually armed?
+    val allAlarmsArmed = isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_MINUS_3H) &&
+        isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_EXACT) &&
+        isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_PLUS_3H)
+
+    // 4) Decide.
+    if (timestampMatches && allAlarmsArmed) {
+        Log.d(SurvivalExpiryConfig.TAG, "Expiry alarms already correctly set for ${Date(recalculatedExpireAtMillis)} — no action needed.")
         return
     }
-    scheduleExpiryAlarms(context, expireAtMillis)
+
+    Log.w(
+        SurvivalExpiryConfig.TAG,
+        "Expiry alarms need (re)setting — timestampMatches=$timestampMatches allAlarmsArmed=$allAlarmsArmed. Setting all 3 alarms."
+    )
+    scheduleExpiryAlarms(context, recalculatedExpireAtMillis)
+}
+
+/**
+ * Returns true if a PendingIntent for the given expiry-alarm requestCode is
+ * still registered with the system (i.e. the alarm hasn't been silently
+ * dropped/revoked — e.g. by a reboot that wasn't followed by a reschedule,
+ * or by the OS/OEM). Uses FLAG_NO_CREATE so this is a pure existence check
+ * that never creates a new PendingIntent as a side effect.
+ */
+private fun isAlarmArmed(context: Context, requestCode: Int): Boolean {
+    val intent = Intent(context, SurvivalExpiryAlarmReceiver::class.java)
+    val pendingIntent = PendingIntent.getBroadcast(
+        context, requestCode, intent,
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    )
+    return pendingIntent != null
 }
 
 private fun scheduleExpiryAlarm(
