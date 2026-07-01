@@ -89,6 +89,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- ── Wifi alarm receiver (6:00 AM / 6:00 PM exact alarms) ──
+             Not registered at runtime — AlarmManager delivers to this
+             component by class name (explicit PendingIntent). Android
+             requires EVERY component, including ones only reached via
+             explicit intents, to be declared here, or the system has
+             nowhere to deliver the broadcast when the alarm fires
+             (a silent no-op that would otherwise be very hard to notice). -->
+        <receiver
+            android:name=".WifiAlarmReceiver"
+            android:exported="false" />
+
+        <!-- ── Survival-expiry 3-shot alarm receiver ── -->
+        <receiver
+            android:name=".SurvivalExpiryAlarmReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>
