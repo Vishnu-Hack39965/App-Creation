@@ -9,6 +9,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
 import java.util.Calendar
+import java.util.Date
 
 // ═══════════════════════════════════════════════════════════════════
 // WifiAlarmReceiver — fires at exact clock times (6:00 AM / 6:00 PM)
