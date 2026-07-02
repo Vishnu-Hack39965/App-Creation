@@ -126,89 +126,73 @@ fun scheduleExpiryAlarms(context: Context, expireAtMillis: Long) {
 }
 
 /**
- * BUG FIX: the old rescheduleExpiryAlarmsIfNeeded() blindly trusted whatever
- * expiry timestamp happened to be cached in SharedPreferences and blindly
- * re-set all 3 alarms every time it ran (on every boot), even when nothing
- * was actually wrong. That meant:
- *   (a) if the cached timestamp had ever drifted out of sync with the real
- *       source of truth (survival.txt) — e.g. partial write, manual data
- *       edit, restore from an old backup — the alarms would silently keep
- *       firing at the WRONG moment forever, since nothing ever re-derived
- *       the correct value from source data.
- *   (b) alarms got re-created unconditionally even when they were already
- *       correctly scheduled, which is wasteful and can reset backoff/OEM
- *       alarm quotas for no reason.
+ * FIX: verifyAndRepairExpiryAlarms() — replaces the old rescheduleExpiryAlarmsIfNeeded().
  *
- * This replacement:
- *   1. RECALCULATES the canonical expiry moment fresh from survival.txt
- *      (the actual source of truth) instead of trusting the cache.
- *   2. Compares that recalculated value against what's cached — a mismatch
- *      means the cache had drifted, so the cache is corrected.
- *   3. Checks whether all 3 alarms (−3h / exact / +3h) are actually still
- *      armed for that expiry moment (PendingIntent.FLAG_NO_CREATE — returns
- *      null if the alarm isn't currently registered, e.g. cleared by a
- *      reboot, cleared by the OS/OEM, or otherwise revoked).
- *   4. If the recalculated expiry matches the cache AND all 3 alarms are
- *      still armed → does nothing (this is the common, healthy case).
- *      Otherwise (timestamp mismatch, or any alarm missing/removed) → all
- *      3 alarms are (re)set against the freshly recalculated expiry time.
+ * The old version blindly trusted whatever expiry timestamp happened to be
+ * cached in SharedPreferences and blindly re-set all 3 alarms every run.
  *
- * Call this from BootReceiver AND from MainActivity.onCreate() (app
- * startup), per requirements. No-op if no deep link has ever fired.
+ * This version:
+ *   1. Uses the STORED expiry timestamp in SharedPrefs as the primary source
+ *      of truth (set once by calculateAndScheduleExpiry() when the deep link
+ *      fires — it never drifts because it's never recomputed from the
+ *      survival file after that point).
+ *   2. Falls back to RECALCULATING from survival.txt ONLY if the prefs key is
+ *      absent (e.g. fresh install, data clear, backup restore without prefs).
+ *      This avoids the floating-point drift bug: readAndUpdateSurvivalTime()
+ *      continuously rewrites (remaining, epoch), and recomputing expiry from
+ *      those values accumulates tiny rounding errors that cause spurious
+ *      "timestamp mismatch" triggers on every startup over time.
+ *   3. Checks whether all 3 alarms are still actually ARMED via FLAG_NO_CREATE.
+ *      If any is missing (revoked by reboot, OEM battery optimizer, etc.) →
+ *      all 3 are re-set.
+ *   4. If all 3 alarms are armed → does nothing (the common healthy case).
+ *
+ * Called from BootReceiver AND MainActivity.onCreate() (per requirements).
+ * No-op if no deep link has ever fired.
  */
 fun verifyAndRepairExpiryAlarms(context: Context) {
     val prefs = context.getSharedPreferences(SurvivalExpiryConfig.PREFS, Context.MODE_PRIVATE)
 
-    // 1) Recalculate the canonical expiry moment from source data.
-    //    Invariant: readAndUpdateSurvivalTime() always re-saves
-    //    (remaining - elapsedDays) alongside the current epoch, so
-    //    savedEpoch + (savedRemaining + 1) days is a FIXED POINT that
-    //    always reproduces the same original expiry instant, regardless
-    //    of when it's recalculated. This exactly mirrors the formula in
-    //    calculateAndScheduleExpiry().
-    val raw = UserDataManager.peekRawSurvival(context)
-    if (raw == null) {
-        Log.d(SurvivalExpiryConfig.TAG, "No survival data on disk — nothing to verify (deep link never fired, or data cleared).")
-        return
+    // Step 1: get the canonical expiry timestamp.
+    // Primary: use the stored prefs value — it is fixed at deep-link time and
+    // never recomputed, so it is immune to floating-point drift.
+    var expireAtMillis = prefs.getLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, -1L)
+
+    if (expireAtMillis <= 0L) {
+        // Fallback: prefs missing (e.g. data was cleared, or old install before
+        // this key existed). Attempt to reconstruct from survival.txt.
+        val raw = UserDataManager.peekRawSurvival(context)
+        if (raw == null) {
+            Log.d(SurvivalExpiryConfig.TAG, "No expiry prefs and no survival data — nothing to verify (deep link never fired or data cleared).")
+            return
+        }
+        val (savedRemaining, savedEpoch) = raw
+        expireAtMillis = savedEpoch + ((savedRemaining + 1.0) * SurvivalExpiryConfig.ONE_DAY_MS).toLong()
+        // Persist the reconstructed value so future startups use the fast path.
+        prefs.edit().putLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, expireAtMillis).apply()
+        Log.w(SurvivalExpiryConfig.TAG, "Expiry prefs were absent — reconstructed and saved: ${java.util.Date(expireAtMillis)}")
     }
-    val (savedRemaining, savedEpoch) = raw
-    val recalculatedExpireAtMillis = savedEpoch +
-        ((savedRemaining + 1.0) * SurvivalExpiryConfig.ONE_DAY_MS).toLong()
 
-    val cachedExpireAtMillis = prefs.getLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, -1L)
-
-    val lastAlarmMillis = recalculatedExpireAtMillis + SurvivalExpiryConfig.THREE_HOURS_MS
+    // Step 2: if the entire expiry window is already in the past, nothing to do.
+    val lastAlarmMillis = expireAtMillis + SurvivalExpiryConfig.THREE_HOURS_MS
     if (lastAlarmMillis <= System.currentTimeMillis()) {
-        Log.d(SurvivalExpiryConfig.TAG, "Recalculated expiry window already fully passed — nothing to reschedule.")
+        Log.d(SurvivalExpiryConfig.TAG, "Expiry window already fully passed (${java.util.Date(expireAtMillis)}) — nothing to reschedule.")
         return
     }
 
-    // 2) Timestamp check: does the cache match the freshly recalculated value?
-    val timestampMatches = cachedExpireAtMillis == recalculatedExpireAtMillis
-    if (!timestampMatches) {
-        Log.w(
-            SurvivalExpiryConfig.TAG,
-            "Expiry timestamp MISMATCH — cached=${Date(cachedExpireAtMillis)} recalculated=${Date(recalculatedExpireAtMillis)}. Correcting cache."
-        )
-        prefs.edit().putLong(SurvivalExpiryConfig.KEY_EXPIRE_MILLIS, recalculatedExpireAtMillis).apply()
-    }
-
-    // 3) Alarm-presence check: are all 3 alarms still actually armed?
+    // Step 3: are all 3 alarms still actually armed?
     val allAlarmsArmed = isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_MINUS_3H) &&
         isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_EXACT) &&
         isAlarmArmed(context, SurvivalExpiryConfig.REQ_CODE_PLUS_3H)
 
-    // 4) Decide.
-    if (timestampMatches && allAlarmsArmed) {
-        Log.d(SurvivalExpiryConfig.TAG, "Expiry alarms already correctly set for ${Date(recalculatedExpireAtMillis)} — no action needed.")
+    if (allAlarmsArmed) {
+        Log.d(SurvivalExpiryConfig.TAG, "All 3 expiry alarms are armed for ${java.util.Date(expireAtMillis)} — no action needed.")
         return
     }
 
-    Log.w(
-        SurvivalExpiryConfig.TAG,
-        "Expiry alarms need (re)setting — timestampMatches=$timestampMatches allAlarmsArmed=$allAlarmsArmed. Setting all 3 alarms."
-    )
-    scheduleExpiryAlarms(context, recalculatedExpireAtMillis)
+    // Step 4: one or more alarms are missing — re-set all 3.
+    Log.w(SurvivalExpiryConfig.TAG, "One or more expiry alarms missing — re-setting all 3 for ${java.util.Date(expireAtMillis)}.")
+    scheduleExpiryAlarms(context, expireAtMillis)
 }
 
 /**
