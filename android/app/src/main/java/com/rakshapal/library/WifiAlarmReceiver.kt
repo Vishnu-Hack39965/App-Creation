@@ -59,10 +59,33 @@ class WifiAlarmReceiver : BroadcastReceiver() {
         }
 
         // These are now daily-repeating alarms, so the OS re-arms them on
-        // its own — no manual reschedule needed here. We just advance the
-        // "expected next trigger" bookkeeping used by the startup health
-        // check, and self-heal defensively in case this firing somehow
-        // happened without the repeat surviving (belt-and-braces).
+        // its own — no manual reschedule needed here. We advance the stored
+        // "expected next trigger" bookkeeping by exactly INTERVAL_DAY so the
+        // startup health check stays accurate after the alarm fires. Without
+        // this update the stored value would remain in the past and every
+        // subsequent startup would incorrectly think the alarms are missing.
+        try {
+            val prefs = appContext.getSharedPreferences(WifiAlarmConfig.PREFS, Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            // Advance whichever key(s) have slipped into the past by one day each.
+            for (key in listOf(WifiAlarmConfig.KEY_NEXT_6AM, WifiAlarmConfig.KEY_NEXT_6PM)) {
+                var next = prefs.getLong(key, -1L)
+                if (next <= now) {
+                    // Step it forward day-by-day until it's in the future, to
+                    // handle the rare case where multiple days were missed (e.g.
+                    // app was force-stopped for several days then reopened).
+                    while (next <= now) next += AlarmManager.INTERVAL_DAY
+                    prefs.edit().putLong(key, next).apply()
+                    Log.d(WifiAlarmConfig.TAG, "Advanced prefs key $key to ${java.util.Date(next)} after alarm fired.")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(WifiAlarmConfig.TAG, "Failed to advance next-trigger prefs after alarm fire: ${e.message}", e)
+        }
+
+        // Belt-and-braces self-heal: re-confirm both alarms are still armed
+        // (the OS should keep repeating them, but this catches any edge case
+        // where the repeat was silently dropped by the system).
         try {
             ensureWifiAlarmsScheduled(appContext)
         } catch (e: Exception) {
