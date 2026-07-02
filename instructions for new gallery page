@@ -1,0 +1,43 @@
+Hello
+
+Can you help me for adding a gallery page in my firebase website.
+
+add a three line icon in my index.html that will contain.
+
+Admin upload (better)GitHub mints URL → Device → Drive directOnceDrive-to-drive transferDrive A → GitHub runner → Drive BOnce (no user device involved, runner is fine here)
+So the final answer:
+(1).UI part:-
+(A) add a three line icon in index.html and on clicking it must show a choose option Data structure page.
+(B) good design a new tab different from account and gallery tab  which will be shown to admin only but not directly. but add a three vertical dot option at top there will be this page option to open and in this page there will be one button at bottom right looking stylic like present in modern website stating ask ai that same layout button . but stating add drive . on clicking this button will open new page that will contain one fill in box stating ask email to connect and a button to add. (pls make a condition that will check if the entered email is coreect or not) two section underneath this box first stating "emails allowed to connect":  with showing email address and two green tick and red cross buttons at right of each button looking like selection for any email if tick is clicked then that user email will be used as saving file for my organisation and if there are three allowed emails in my data structure tab and if the first email 10 gb data is filled then the second drive will be used to save other remaining files and if again the 10 gb data stored in my allowed folder is complete then third email will be used and if admin want then he can arange the email order by choosing and making that email no. up of another and if admin want to store data to any emain at last then he can choose and down that email in data structure page so if the above emails 10 gb will be filled then only it will come to last email other iwse if anyfile is deleted in between like 3 drives are full and if files from 2nd fdrive are cleared then the total storage in that drie will be lless then the new file would be saved to 2nd blank space after filling that it will proceed to next email checkif full then proceed next and find empty store to that email then stop after all files saved. and also if any file is deleted then it will be moved to the emails stated to save deleted datonly. and remember the file saved to each email must be maxium to 10 gb if overall data storagee must not exceed 10gb limit for each emal if one email storage max 10gb rule reached then it swiches to secong email. like a smart storage manager) and second page oin "add email is asked pending email. section which will show only the emails whom the asked message is sent. now how this asked message is sent it is sent like this:- the requested email account page(exist) will show one more button "connect to Rakshapal Singh Servers" above seat no. field and this will reedirect him to allow or deny.and after allowing the button must disappear with a message showd "connected to Rakshapal Singh Library Server" down to expire last date section above seat no.  and if admin cancels the email from "ask email" page then the button also disappear without anyy message and leaivng account tab as before unchanged.Make a complete plan 
+donot leave the process mid way. even if credit finishes.
+if admin remive the user email from ask email accepted
+(C) there will be two tabs inside data structure first stating online files emails and second deleted files saving emails:-now admin can move any file from one tab to another by selecting email and choosing its option for saving online data or deleted file data, and moving one email to another tab must not delete ists data instead like a smart file magemnt system it must move the files savved in that moving email to another email of thethat tab like if moving a filled email from online fata saved to deleted data saved then the files inside that email must be moved to another emails inside online data saved and then move that file to another , for th moving a filled email to another tab there must be a warn messasage to admin that this email contain this much of dat <file size in gb / mb> and this will take this much of time to move files and email to different section:- <time taken to move files from one email to another email> in that sectio. then cancel / do it button.
+
+(D) now add a new gallery tab for all user view shown before account page. now this page will
+
+2.Back condition in index.html:-
+(a) now when ever admin add a file to gallery page then first github workflow will be called using the token saved in firestore is used to ask the resumable upload url and then the files shared will be added to pending file in new page which will show the pending upload files to admin only.
+(b) when admin see the data structure page and rearrange the orders then the all instructions(containing all details like these file from drive A to drive B and all files from drive B to drive D and etc.) will be calculated at the frontent level and then send to second github workflow using second token to move files from the instructed emails to other emails as per instructions send by frontent javascript.
+
+
+3. Admin upload → GitHub mints a resumable upload URL, hands it to the browser, browser uploads directly to Drive. GitHub never sees the file bytes. Fast.
+Drive-to-drive transfer → GitHub runner as middleman is genuinely fine and is the best available option, as confirmed by the search. No third-party risk, fully automated, and the runner's network (Microsoft Azure datacenters) to Google's servers is fast — much faster than your personal internet connection. The slowness concern doesn't apply here because it's datacenter-to-datacenter, not your home connection.
+
+4.i also want to add a workflow that will " Set up a scheduled Github (a cron job) to wake up once a month, grab your users' tokens, and query a basic file list from their Google Drive. This keeps the tokens active in Google's logs."
+
+
+(I) add the working ui only at first.
+(II) tell me the working javascript for this.
+(III) add the github workflow for this with firestore read/write access.
+(IV) other requirements step/setup
+
+
+
+
+
+
+
+
+
+
+
