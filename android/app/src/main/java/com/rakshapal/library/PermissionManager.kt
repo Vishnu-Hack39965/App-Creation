@@ -62,8 +62,14 @@ object PermissionManager {
 
     /**
      * Call from onCreate() and onResume(). Walks runtime permissions first,
-     * then special-access ones, and acts on the first one missing. Safe to
-     * call repeatedly — it's a no-op once everything is granted.
+     * then the SCHEDULE_EXACT_ALARM special-access permission, and acts on
+     * the first one missing. Safe to call repeatedly — no-op once all granted.
+     *
+     * NOTE: REQUEST_INSTALL_PACKAGES ("Install unknown apps") is intentionally
+     * NOT checked here. It is only requested at the moment the user taps
+     * "Install Now" in the update dialog (see promptInstall() in
+     * UpdateChecker.kt). Asking for it at every startup is unnecessarily
+     * intrusive and contradicts standard Android UX expectations.
      */
     fun ensureAllPermissions(activity: Activity) {
         for (permission in runtimePermissions()) {
@@ -73,15 +79,11 @@ object PermissionManager {
             }
         }
 
-        if (!canInstallPackages(activity)) {
-            requestInstallPackagesPermission(activity)
-            return
-        }
         if (!canScheduleExactAlarms(activity)) {
             requestExactAlarmPermission(activity)
             return
         }
-        // All required permissions granted — nothing to do.
+        // All required startup permissions granted — nothing to do.
     }
 
     // ── Runtime permission request/response ──────────────────────────────
@@ -127,10 +129,10 @@ object PermissionManager {
 
     // ── Special-access permissions (Settings-screen only) ────────────────
 
-    private fun canInstallPackages(context: Context): Boolean =
+    internal fun canInstallPackages(context: Context): Boolean =
         context.packageManager.canRequestPackageInstalls()
 
-    private fun requestInstallPackagesPermission(activity: Activity) {
+    internal fun requestInstallPackagesPermission(activity: Activity) {
         Toast.makeText(
             activity,
             "📦 \"Install unknown apps\" permission is required for auto-updates.\nPlease allow it on the next screen.",
@@ -166,7 +168,7 @@ object PermissionManager {
     private fun requestExactAlarmPermission(activity: Activity) {
         Toast.makeText(
             activity,
-            "⏰ \"Alarms & reminders\" permission is required for exact-time background tasks.\nPlease allow it on the next screen.",
+            "⏰ \"Alarms & reminders\" permission is required for exact-time tasks.\nPlease allow it on the next screen.",
             Toast.LENGTH_LONG
         ).show()
         try {
