@@ -159,6 +159,30 @@ object UserDataManager {
         } catch (e: Exception) { 0.0 }
     }
 
+    /**
+     * Reads the raw (savedRemaining, savedEpoch) pair straight out of
+     * survival.txt with NO recomputation and NO re-save. Used by
+     * verifyAndRepairExpiryAlarms() as a fallback when the SharedPrefs
+     * expiry key is absent (e.g. after a data clear or restore without
+     * prefs), so the canonical expiry timestamp can be reconstructed
+     * without touching the survival file. Returns null if the file
+     * doesn't exist or can't be parsed.
+     */
+    fun peekRawSurvival(context: Context): Pair<Double, Long>? {
+        val f = getFile(context, FILE_SURVIVAL)
+        if (!f.exists()) return null
+        return try {
+            val raw = decode(f.readText().trim())
+            val parts = raw.split("|")
+            val savedRemaining = parts[0].toDouble()
+            val savedEpoch     = parts[1].toLong()
+            savedRemaining to savedEpoch
+        } catch (e: Exception) {
+            Log.e(TAG, "peekRawSurvival parse error: ${e.message}")
+            null
+        }
+    }
+
     // ─── Delete ───────────────────────────────────────────────────────────
 
     fun deleteAll(context: Context) {
