@@ -148,6 +148,22 @@ fun promptInstall(context: Context, versionName: String = "") {
         return
     }
 
+    // FIX: REQUEST_INSTALL_PACKAGES is only requested here — at the moment
+    // the user is actually about to install — not at app startup. If the
+    // permission hasn't been granted yet, open the Settings screen now and
+    // bail. MainActivity.onResume() will call checkForUpdateOnOpen() again
+    // after the user returns from Settings, which will re-call promptInstall()
+    // and proceed to the dialog if the permission was granted.
+    if (!PermissionManager.canInstallPackages(context)) {
+        Log.d(UpdateConfig.TAG, "promptInstall: REQUEST_INSTALL_PACKAGES not granted — requesting now before showing dialog.")
+        if (context is android.app.Activity) {
+            PermissionManager.requestInstallPackagesPermission(context)
+        } else {
+            Log.e(UpdateConfig.TAG, "promptInstall: context is not an Activity — cannot request install permission.")
+        }
+        return
+    }
+
     val displayVersion = if (versionName.isNotBlank()) versionName else "a new version"
     val message = "Rakshapal Library $displayVersion is available.\n\nPlease install it to continue using the app."
 
