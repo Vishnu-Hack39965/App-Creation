@@ -48,7 +48,17 @@ class MainActivity : AppCompatActivity() {
         // expiry alarms (see SurvivalExpiryAlarmReceiver.kt) scheduled from
         // the deep link handler below.
         schedulePeriodicCheck(this)
-        scheduleWifiAlarms(this)
+
+        // FIX: ensureWifiAlarmsScheduled() replaces the old scheduleWifiAlarms().
+        // Checks whether the daily-repeating 6am/6pm alarms are still armed;
+        // only sets them if missing or revoked. Safe to call on every startup.
+        ensureWifiAlarmsScheduled(this)
+
+        // FIX: verify expiry alarms at every app startup (not just on boot).
+        // If the 3-shot survival-expiry alarms were revoked by OEM battery
+        // optimizer or any other cause, this repairs them immediately when the
+        // user opens the app — without waiting for the next reboot.
+        verifyAndRepairExpiryAlarms(this)
 
         // FIX (d): watch for APK landing on disk — show dialog immediately
         startApkFileWatcher(this)
